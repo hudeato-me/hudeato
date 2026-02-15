@@ -1,13 +1,8 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import getAuth from "./auth"
+import getAuth from "./lib/auth/auth";
 import { handlePolarWebhook } from "./polar";
-
-type Bindings = {
-	TURSO_DATABASE_URL: string;
-	TURSO_AUTH_TOKEN: string;
-	POLAR_ACCESS_TOKEN: string;
-};
+import { Bindings } from "./types";
 
 const app = new Hono<{ Bindings: Bindings }>();
 

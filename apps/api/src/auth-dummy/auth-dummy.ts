@@ -1,24 +1,13 @@
-import { betterAuth } from "better-auth";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { Context } from "hono";
-import { createDb } from "../db";
+import { betterAuthConfig } from "../lib/auth/better-auth-config";
 
 const getAuth = (c: Context) => {
-	const db = createDb(process.env.TURSO_DATABASE_URL!, process.env.TURSO_AUTH_TOKEN!);
-	return betterAuth({
-		database: drizzleAdapter(db, {
-			provider: "sqlite",
-		}),
-		emailAndPassword: {
-			enabled: true,
-		},
-		baseURL: process.env.BETTER_AUTH_BASE_URL,
-		// socialProviders: {
-		//   github: {
-		//     clientId: c.env.GITHUB_CLIENT_ID,
-		//     clientSecret: c.env.GITHUB_CLIENT_SECRET,
-		//   }
-		// }
+	return betterAuthConfig({
+		tursoDatabaseUrl: process.env.TURSO_DATABASE_URL!,
+		tursoAuthToken: process.env.TURSO_AUTH_TOKEN!,
+		betterAuthBaseUrl: process.env.BETTER_AUTH_BASE_URL!,
+		upstashRedisRestUrl: process.env.UPSTASH_REDIS_REST_URL!,
+		upstashRedisRestToken: process.env.UPSTASH_REDIS_REST_TOKEN!,
 	});
 };
 

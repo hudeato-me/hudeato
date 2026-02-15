@@ -1,4 +1,6 @@
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { account as accountTable, user as userTable } from "../db/auth-schema";
 import {
 	createTestApp,
 	extractCookies,
@@ -290,5 +292,125 @@ describe("Story 5: E2Eフルフロー", () => {
 			cookie,
 		);
 		expect(afterSignOutRes.status).toBe(401);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Story 6: データ層直接検証 (SQLite + Redis) 🔍
+// ---------------------------------------------------------------------------
+describe("Story 6: データ層直接検証", () => {
+	const dbUser = {
+		email: "db-verify@example.com",
+		password: "dbVerifyPass123",
+		name: "DB Verify User",
+	};
+
+	it("6-1: ユーザー登録後、SQLiteのuserテーブルにレコードが存在する", async () => {
+		const res = await signUp(app, dbUser);
+		expect(res.status).toBe(200);
+		const body: Json = await res.json();
+		const userId = body.user.id;
+
+		// SQLiteを直接クエリ
+		const rows = await ctx.db
+			.select()
+			.from(userTable)
+			.where(eq(userTable.email, dbUser.email));
+
+		expect(rows).toHaveLength(1);
+		expect(rows[0].id).toBe(userId);
+		expect(rows[0].name).toBe(dbUser.name);
+		expect(rows[0].email).toBe(dbUser.email);
+		expect(rows[0].emailVerified).toBe(false);
+	});
+
+	it("6-2: ユーザー登録後、accountテーブルに credential レコードが存在する", async () => {
+		// 6-1で登録済のユーザーを検索
+		const users = await ctx.db
+			.select()
+			.from(userTable)
+			.where(eq(userTable.email, dbUser.email));
+		const userId = users[0].id;
+
+		const accounts = await ctx.db
+			.select()
+			.from(accountTable)
+			.where(eq(accountTable.userId, userId));
+
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0].providerId).toBe("credential");
+		expect(accounts[0].userId).toBe(userId);
+		// パスワードがハッシュ化されて保存されていることを確認
+		expect(accounts[0].password).toBeTruthy();
+		expect(accounts[0].password).not.toBe(dbUser.password); // 平文ではない
+	});
+
+	it("6-3: ログイン後、Redisにセッショントークンが保存される", async () => {
+		// ログイン前のRedisキー数を記録
+		const keysBefore = ctx.storage._keys();
+
+		const signInRes = await signIn(app, {
+			email: dbUser.email,
+			password: dbUser.password,
+		});
+		expect(signInRes.status).toBe(200);
+
+		// Redisモックを直接確認: ログイン後にキーが増えている
+		const keysAfter = ctx.storage._keys();
+		expect(keysAfter.length).toBeGreaterThan(keysBefore.length);
+
+		// better-auth は `active-sessions-{userId}` キーにセッション一覧を保存する
+		const activeSessionsKey = keysAfter.find((k) =>
+			k.startsWith("active-sessions-"),
+		);
+		expect(activeSessionsKey).toBeDefined();
+
+		// active-sessions にトークン情報が入っている
+		const sessionsRaw = await ctx.storage.get(activeSessionsKey!);
+		expect(sessionsRaw).toBeTruthy();
+		const sessions = JSON.parse(sessionsRaw!) as Array<{
+			token: string;
+			expiresAt: number;
+		}>;
+		expect(sessions.length).toBeGreaterThan(0);
+
+		// 各セッショントークンもRedisに個別キーとして存在する
+		for (const session of sessions) {
+			const tokenExists = ctx.storage._has(session.token);
+			expect(tokenExists).toBe(true);
+		}
+	});
+
+	it("6-4: サインアウト後、Redisのセッション状態が変化し、セッションが無効化される", async () => {
+		// ログインしてセッション取得
+		const signInRes = await signIn(app, {
+			email: dbUser.email,
+			password: dbUser.password,
+		});
+		const cookie = extractCookies(signInRes);
+
+		// ログイン直後のRedis全体のスナップショット
+		const entriesBefore = ctx.storage._entries();
+		const snapshotBefore = JSON.stringify(entriesBefore);
+
+		// サインアウト
+		const signOutRes = await signOut(app, cookie);
+		expect(signOutRes.status).toBe(200);
+
+		// サインアウト後、Redisの状態が変化している（何かしらの書き込み/削除が発生）
+		const entriesAfter = ctx.storage._entries();
+		const snapshotAfter = JSON.stringify(entriesAfter);
+		expect(snapshotAfter).not.toBe(snapshotBefore);
+
+		// 最重要: サインアウト後にそのCookieでセッションが取得できないことを
+		// データ層レベルで確認（APIからも確認）
+		const sessionRes = await requestWithSession(
+			app,
+			"/api/auth/get-session",
+			cookie,
+		);
+		const sessionBody: Json = await sessionRes.json();
+		// セッションが無効化されている（nullまたはエラー）
+		expect(sessionBody?.session).toBeFalsy();
 	});
 });

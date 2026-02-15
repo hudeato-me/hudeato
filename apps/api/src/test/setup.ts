@@ -35,8 +35,36 @@ const createInMemoryStorage = () => {
 		},
 		/** テストヘルパー: ストアを全消去 */
 		_clear: () => store.clear(),
+		/** テストヘルパー: 全エントリを返す（期限切れ除外） */
+		_entries: () => {
+			const result: Record<string, string> = {};
+			for (const [key, entry] of store) {
+				if (!entry.expiresAt || Date.now() <= entry.expiresAt) {
+					result[key] = entry.value;
+				}
+			}
+			return result;
+		},
+		/** テストヘルパー: 指定キーが存在するか確認 */
+		_has: (key: string) => {
+			const entry = store.get(key);
+			if (!entry) return false;
+			if (entry.expiresAt && Date.now() > entry.expiresAt) return false;
+			return true;
+		},
+		/** テストヘルパー: プレフィックスに一致するキーを返す */
+		_keys: (prefix?: string) => {
+			const keys: string[] = [];
+			for (const [key, entry] of store) {
+				if (entry.expiresAt && Date.now() > entry.expiresAt) continue;
+				if (!prefix || key.startsWith(prefix)) keys.push(key);
+			}
+			return keys;
+		},
 	};
 };
+
+export type InMemoryStorage = ReturnType<typeof createInMemoryStorage>;
 
 // ---------------------------------------------------------------------------
 // テスト用DB & Auth のセットアップ
@@ -48,8 +76,9 @@ const MIGRATION_SQL_PATH = path.resolve(
 
 export interface TestContext {
 	auth: ReturnType<typeof betterAuth>;
+	db: ReturnType<typeof drizzle>;
 	dbPath: string;
-	storage: ReturnType<typeof createInMemoryStorage>;
+	storage: InMemoryStorage;
 	cleanup: () => void;
 }
 
@@ -103,6 +132,7 @@ export function createTestContext(): TestContext {
 
 	return {
 		auth,
+		db,
 		dbPath,
 		storage,
 		cleanup,

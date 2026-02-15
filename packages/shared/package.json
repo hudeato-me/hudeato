@@ -1,0 +1,22 @@
+{
+	"name": "@hudeato/shared",
+	"version": "0.0.0",
+	"private": true,
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"import": "./src/index.ts",
+			"require": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "tsc",
+		"typecheck": "tsc --noEmit",
+		"lint": "eslint ."
+	},
+	"devDependencies": {
+		"@hudeato/config": "workspace:*",
+		"typescript": "^5.0.0"
+	}
+}

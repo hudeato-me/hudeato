@@ -8,31 +8,13 @@
     "dev": "turbo run dev"
   },
   "devDependencies": {
-    "typescript": "^5.0.0",
     "eslint": "^9.0.0",
     "prettier": "^3.0.0",
-    "turbo": "^2.0.0"
+    "turbo": "^2.0.0",
+    "typescript": "^5.0.0"
   },
   "packageManager": "pnpm@9.0.0",
-  "pnpm": {
-    "overrides": {
-      "esbuild": "^0.25.0",
-      "@tanstack/react-router": "1.120.20",
-      "@tanstack/router-generator": "1.120.20",
-      "@tanstack/router-plugin": "1.120.20",
-      "@tanstack/start": "1.120.20",
-      "@tanstack/start-plugin-core": "1.120.20",
-      "@tanstack/react-start-plugin": "1.120.17",
-      "@tanstack/react-start-server": "1.120.20",
-      "@tanstack/react-start-client": "1.120.20",
-      "@tanstack/start-config": "1.120.20",
-      "@tanstack/start-api-routes": "1.120.19",
-      "@tanstack/start-server-functions-server": "1.120.17",
-      "@tanstack/start-server-functions-client": "1.120.19",
-      "@tanstack/start-server-functions-ssr": "1.120.19",
-      "@tanstack/start-server-functions-handler": "1.120.19",
-      "@tanstack/server-functions-plugin": "1.120.17",
-      "@tanstack/react-start-router-manifest": "1.120.19"
-    }
+  "dependencies": {
+    "zod": "^4"
   }
 }

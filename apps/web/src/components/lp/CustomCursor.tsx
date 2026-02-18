@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react'
 
 export function CustomCursor() {
+  // 筆跡の位置と可視・不可視を管理
   const [position, setPosition] = useState({ x: -100, y: -100 })
   const [isVisible, setIsVisible] = useState(false)
+  // クリック時の波紋
   const [ripples, setRipples] = useState<{ x: number; y: number; id: number }[]>([])
 
   useEffect(() => {
+    // マウス位置を更新する関数
     const updatePosition = (e: MouseEvent) => {
       requestAnimationFrame(() => {
         setPosition({ x: e.clientX, y: e.clientY })
@@ -13,27 +16,26 @@ export function CustomCursor() {
       })
     }
 
+    // 波紋生成の関数
     const handleMouseDown = (e: MouseEvent) => {
+        // クリック時に座標とIDを記録
       const newRipple = { x: e.clientX, y: e.clientY, id: Date.now() }
+      // リストに座標とIDの組み合わせを追加
       setRipples((prev) => [...prev, newRipple])
+      // 1000ミリ秒後に、リストから削除
       setTimeout(() => {
         setRipples((prev) => prev.filter((r) => r.id !== newRipple.id))
       }, 1000)
     }
-
-    const handleMouseEnter = () => setIsVisible(true)
-    const handleMouseLeave = () => setIsVisible(false)
-
+    
+    // マウスが動いたら、位置を更新
     window.addEventListener('mousemove', updatePosition)
+    // クリックしたら、波紋を生成
     window.addEventListener('mousedown', handleMouseDown)
-    window.addEventListener('mouseenter', handleMouseEnter)
-    window.addEventListener('mouseleave', handleMouseLeave)
 
     return () => {
       window.removeEventListener('mousemove', updatePosition)
       window.removeEventListener('mousedown', handleMouseDown)
-      window.removeEventListener('mouseenter', handleMouseEnter)
-      window.removeEventListener('mouseleave', handleMouseLeave)
     }
   }, [isVisible])
 
@@ -61,7 +63,7 @@ export function CustomCursor() {
           }}
         />
       ))}
-
+    {/* 追従する円 */}
       <div
         className="fixed top-0 left-0 pointer-events-none z-50 mix-blend-multiply transition-transform duration-300 ease-out will-change-transform"
         style={{

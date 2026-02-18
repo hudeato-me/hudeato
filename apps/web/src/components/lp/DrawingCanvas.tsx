@@ -1,22 +1,26 @@
 import { useRef, useEffect } from 'react'
 
+// 筆跡を残す関数
 export function DrawingCanvas() {
+  // canvas elementを使用
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  // ストロークデータ
+  // 筆跡のデータ
   const strokes = useRef<{ points: { x: number; y: number }[]; life: number; isDrawing: boolean }[]>([])
   const requestRef = useRef<number>(0)
   const currentStroke = useRef<{ points: { x: number; y: number }[]; life: number; isDrawing: boolean } | null>(null)
 
-  // 補間関数
+  // 打った点同士の中間を埋めて滑らかな線にする関数
   const addInterpolatedPoints = (
     stroke: typeof currentStroke.current,
     start: { x: number; y: number },
     end: { x: number; y: number }
   ) => {
     if (!stroke) return
+    // 差を計算
     const dx = end.x - start.x
     const dy = end.y - start.y
+    // 距離を計算
     const distance = Math.sqrt(dx * dx + dy * dy)
     const step = 6
 
@@ -24,6 +28,7 @@ export function DrawingCanvas() {
       const t = distance === 0 ? 0 : i / distance
       const x = start.x + dx * t
       const y = start.y + dy * t
+      // 点を打つ
       stroke.points.push({ x, y })
     }
   }
@@ -44,27 +49,33 @@ export function DrawingCanvas() {
     // スクロールやリサイズに対応
     window.addEventListener('resize', resizeCanvas)
 
-    // --- アニメーションループ ---
+    // 毎秒60回画面を書き換える関数
     const animate = () => {
+      // 画面をクリア
       ctx.clearRect(0, 0, canvas.width, canvas.height)
-
+      // canvasの筆の設定
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
       ctx.lineWidth = 32
-
+      // 
       const aliveStrokes: typeof strokes.current = []
-
+      // 筆のストロークのアニメーション
       strokes.current.forEach((stroke) => {
+        // もし書き終わっていれば
         if (!stroke.isDrawing) {
+          // lifeを小さくする
           stroke.life -= 0.01
         }
-
+        // lifeが0でなければ
         if (stroke.life > 0) {
+          // 筆のストロークをリストに残す
           aliveStrokes.push(stroke)
+          // 透明度を計算
           const opacity = stroke.life * 0.3
           ctx.strokeStyle = `rgba(148, 163, 184, ${opacity})`
-
+          // 描画
           ctx.beginPath()
+          // 点であれば
           if (stroke.points.length < 2) {
             if (stroke.points[0]) {
               ctx.fillStyle = ctx.strokeStyle
@@ -72,16 +83,19 @@ export function DrawingCanvas() {
               ctx.fill()
             }
           } else {
+            // 点でなく線であれば
             ctx.moveTo(stroke.points[0].x, stroke.points[0].y)
             for (let i = 1; i < stroke.points.length; i++) {
               ctx.lineTo(stroke.points[i].x, stroke.points[i].y)
             }
+            // 線を引く
             ctx.stroke()
           }
         }
       })
-
+      // リストを更新する
       strokes.current = aliveStrokes
+      // また関数を呼ぶことをリクエスト
       requestRef.current = requestAnimationFrame(animate)
     }
     requestRef.current = requestAnimationFrame(animate)
@@ -105,6 +119,7 @@ export function DrawingCanvas() {
       }
     }
 
+    // マウス操作時に実行される関数
     const startDrawing = (e: MouseEvent | TouchEvent) => {
       // 左クリックのみ
       if ('button' in e && (e as MouseEvent).button !== 0) return
@@ -129,7 +144,7 @@ export function DrawingCanvas() {
       }
     }
 
-    // Canvasでのみ開始
+    // マウス操作に応じて、関数を実行
     canvas.addEventListener('mousedown', startDrawing)
     canvas.addEventListener('touchstart', startDrawing, { passive: false })
 

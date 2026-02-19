@@ -1,5 +1,10 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
+import { Activity } from '~/components/dashboard/Activity'
+import { Footer } from '~/components/Footer'
+import { Header } from '~/components/Header'
+import { RecentWordItem } from '~/components/dashboard/RecentWordItem'
+import { StatCard } from '~/components/dashboard/StatCard'
 import { authClient } from '~/lib/auth-client'
 
 export const Route = createFileRoute('/dashboard')({
@@ -11,7 +16,7 @@ interface UserSession {
     id: string
     name: string
     email: string
-    createdAt: string
+    createdAt: string | Date
     image?: string | null
   }
 }
@@ -64,92 +69,61 @@ function DashboardPage() {
   })
 
   const stats = {
-    words: 0,
-    mastered: 0,
-    streak: 0,
+    words: 142,
+    mastered: 85,
+    streak: 21,
   }
 
+  const recentWords = [
+    {
+      word: 'ephemeral',
+      meaning: '一時的な、はかない',
+      note: '3分前に復習',
+    },
+    {
+      word: 'meticulous',
+      meaning: '几帳面な、綿密な',
+      note: '今日の新規登録',
+    },
+    {
+      word: 'resilient',
+      meaning: '回復力のある、しなやかな',
+      note: '昨日の復習',
+    },
+    {
+      word: 'lucid',
+      meaning: '明快な、分かりやすい',
+      note: '2日前に復習',
+    },
+  ]
+
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header */}
-      <header className="sticky top-0 z-50 px-6 py-4 flex items-center justify-between bg-white/90 backdrop-blur-xl border-b border-black/[0.06] max-sm:px-4">
-        <div className="flex items-center gap-4">
-          <Link to="/" className="no-underline">
-            <div className="text-xl font-extrabold tracking-tight bg-gradient-to-br from-[#1a1a2e] to-[#6c63ff] bg-clip-text text-transparent">
-              Hudeato
-            </div>
-          </Link>
-          <span className="text-sm text-black/30">
-            こんにちは、{user.name || user.email.split('@')[0]}さん
-          </span>
-        </div>
-        <button
-          type="button"
-          className="px-4 py-2 rounded-full text-xs font-semibold border-[1.5px] border-black/10 bg-white text-black/40 cursor-pointer transition-all duration-200 font-[inherit] hover:border-red-500 hover:text-red-500 hover:bg-red-50"
-          onClick={handleLogout}
-        >
-          ログアウト
-        </button>
-      </header>
+    <div className="min-h-screen bg-white text-black/80">
+      <main className="max-w-[430px] mx-auto px-4 pt-5 pb-30 space-y-5">
+        <Header onLogout={handleLogout} />
 
-      {/* Content */}
-      <main className="max-w-[720px] mx-auto px-6 py-10 space-y-6 max-sm:px-4 max-sm:py-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-1">ダッシュボード</h1>
-          <p className="text-black/30 text-[0.95rem]">
-            学習の進捗状況を確認しましょう
-          </p>
-        </div>
+        <section className="grid grid-cols-3 gap-3">
+          <StatCard label="Words" value={stats.words} cardClass="bg-white/62" />
+          <StatCard label="Mastered" value={stats.mastered} cardClass="bg-white/50" />
+          <StatCard label="Streak" value={stats.streak} cardClass="bg-white/38" />
+        </section>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-3 gap-4 max-sm:grid-cols-1">
-          <div className="bg-black/[0.02] rounded-2xl p-6 border border-black/5">
-            <div className="text-sm text-black/40 mb-1">Words</div>
-            <div className="text-3xl">{stats.words}</div>
-          </div>
-          <div className="bg-black/[0.02] rounded-2xl p-6 border border-black/5">
-            <div className="text-sm text-black/40 mb-1">Mastered</div>
-            <div className="text-3xl">{stats.mastered}</div>
-          </div>
-          <div className="bg-black/[0.02] rounded-2xl p-6 border border-black/5">
-            <div className="text-sm text-black/40 mb-1">Streak</div>
-            <div className="text-3xl">{stats.streak}</div>
-          </div>
-        </div>
+        <Activity />
 
-        {/* User Info */}
-        <div className="bg-black/[0.02] rounded-2xl p-6 border border-black/5">
-          <div className="text-xs font-semibold text-black/30 uppercase tracking-wider mb-4">
-            アカウント情報
-          </div>
-          <div className="flex items-center justify-between py-3 border-b border-black/5">
-            <span className="text-sm text-black/40">名前</span>
-            <span className="text-sm font-semibold">{user.name || '未設定'}</span>
-          </div>
-          <div className="flex items-center justify-between py-3 border-b border-black/5">
-            <span className="text-sm text-black/40">メール</span>
-            <span className="text-sm font-semibold break-all">{user.email}</span>
-          </div>
-          <div className="flex items-center justify-between py-3 border-b border-black/5">
-            <span className="text-sm text-black/40">ユーザーID</span>
-            <span className="text-sm font-semibold break-all">{user.id}</span>
-          </div>
-          <div className="flex items-center justify-between py-3">
-            <span className="text-sm text-black/40">登録日</span>
-            <span className="text-sm font-semibold">{createdDate}</span>
-          </div>
-        </div>
-
-        {/* Activity */}
-        <div className="bg-black/[0.02] rounded-2xl p-6 border border-black/5">
-          <div className="text-xs font-semibold text-black/30 uppercase tracking-wider mb-4">
-            最近のアクティビティ
-          </div>
-          <p className="text-black/25 text-sm py-4">
-            まだアクティビティはありません。学習を始めましょう！
-          </p>
-        </div>
+        <section className="space-y-3">
+          <div className="text-[2rem] leading-none text-black/60 px-1">Recent Words</div>
+          {recentWords.map((item) => (
+            <RecentWordItem
+              key={`${item.word}-${item.note}`}
+              word={item.word}
+              meaning={item.meaning}
+              note={item.note}
+            />
+          ))}
+        </section>
       </main>
+
+      <Footer />
     </div>
   )
 }

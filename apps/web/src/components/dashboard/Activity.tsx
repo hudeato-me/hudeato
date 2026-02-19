@@ -27,7 +27,7 @@ export function Activity() {
   const activityCells = createActivityCells()
 
   return (
-    <section className="rounded-3xl border border-black/5 bg-white/45 backdrop-blur-xl p-4">
+    <section className="rounded-3xl border border-black/5 bg-black/2 backdrop-blur-xl p-4">
       <div className="text-black/55 text-[1rem] mb-3">Activity</div>
       <div className="grid grid-cols-[40px_1fr] grid-rows-[auto_auto] gap-x-2 gap-y-2 items-start">
         <div />

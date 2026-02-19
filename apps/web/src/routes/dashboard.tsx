@@ -78,22 +78,18 @@ function DashboardPage() {
     {
       word: 'ephemeral',
       meaning: '一時的な、はかない',
-      note: '3分前に復習',
     },
     {
       word: 'meticulous',
       meaning: '几帳面な、綿密な',
-      note: '今日の新規登録',
     },
     {
       word: 'resilient',
       meaning: '回復力のある、しなやかな',
-      note: '昨日の復習',
     },
     {
       word: 'lucid',
       meaning: '明快な、分かりやすい',
-      note: '2日前に復習',
     },
   ]
 
@@ -103,22 +99,17 @@ function DashboardPage() {
         <Header onLogout={handleLogout} />
 
         <section className="grid grid-cols-3 gap-3">
-          <StatCard label="Words" value={stats.words} cardClass="bg-white/62" />
-          <StatCard label="Mastered" value={stats.mastered} cardClass="bg-white/50" />
-          <StatCard label="Streak" value={stats.streak} cardClass="bg-white/38" />
+          <StatCard label="Words" value={stats.words} cardClass="bg-black/2" />
+          <StatCard label="Mastered" value={stats.mastered} cardClass="bg-black/4" />
+          <StatCard label="Streak" value={stats.streak} cardClass="bg-black/6" />
         </section>
 
         <Activity />
 
         <section className="space-y-3">
-          <div className="text-[2rem] leading-none text-black/60 px-1">Recent Words</div>
+          <div className="text-[1rem] leading-none text-black/60 px-1">Recent Words</div>
           {recentWords.map((item) => (
-            <RecentWordItem
-              key={`${item.word}-${item.note}`}
-              word={item.word}
-              meaning={item.meaning}
-              note={item.note}
-            />
+            <RecentWordItem key={`${item.word}-${item.meaning}`} word={item.word} meaning={item.meaning} />
           ))}
         </section>
       </main>

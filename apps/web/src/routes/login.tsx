@@ -37,7 +37,6 @@ function LoginPage() {
         const result = await authClient.signIn.email({
           email,
           password,
-          name: undefined, 
         })
         if (result.error) {
           setError(result.error.message || 'ログインに失敗しました')

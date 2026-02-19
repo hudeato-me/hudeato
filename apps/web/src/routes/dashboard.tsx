@@ -33,14 +33,18 @@ function DashboardPage() {
     const fetchSession = async () => {
       try {
         const result = await authClient.getSession()
+        // userがいなかったらログインページに遷移
         if (!result.data?.user) {
           navigate({ to: '/login' })
           return
         }
+        // user情報をsessionにセット
         setSession(result.data as UserSession)
       } catch {
+        // エラーが起きれば、ログインページへ
         navigate({ to: '/login' })
       } finally {
+        // ローディングを非表示に。
         setLoading(false)
       }
     }

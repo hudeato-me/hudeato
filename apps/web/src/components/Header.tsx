@@ -32,7 +32,6 @@ export function Header({ onLogout, currentWordSet, onOpenWordSet }: HeaderProps)
         aria-label="単語セットを開く"
       >
         {currentWordSet}
-        <span className="text-black/55">⌄</span>
       </button>
       <div className="flex items-center gap-2">
         <button

@@ -56,7 +56,7 @@ export function ActivityDot({ seed, level }: ActivityDotProps) {
   const blurId = `brush-dot-blur-${seed}`
 
   return (
-    <svg viewBox="0 0 20 20" className="h-[26px] w-[26px] text-black">
+    <svg viewBox="0 0 20 20" className="h-[var(--cell-size)] w-[var(--cell-size)] text-black">
       <defs>
         <filter id={blurId} x="-20%" y="-20%" width="140%" height="140%">
           <feGaussianBlur stdDeviation="0.45" />

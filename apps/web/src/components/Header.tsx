@@ -1,5 +1,7 @@
 interface HeaderProps {
   onLogout: () => void | Promise<void>
+  currentWordSet: string
+  onOpenWordSet: () => void
 }
 
 function SettingsIcon() {
@@ -20,25 +22,19 @@ function UserIcon() {
   )
 }
 
-export function Header({ onLogout }: HeaderProps) {
+export function Header({ onLogout, currentWordSet, onOpenWordSet }: HeaderProps) {
   return (
     <header className="sticky top-3 z-40 rounded-4xl border border-black/5 bg-white/50 backdrop-blur-xl px-4 py-3 flex items-center justify-between">
-      <select
-        aria-label="学習言語"
-        className="h-10 px-4 rounded-full border border-black/10 bg-white/55 backdrop-blur-xl text-sm text-black/80 outline-none"
-        defaultValue="英単語用"
+      <button
+        type="button"
+        onClick={onOpenWordSet}
+        className="h-10 px-4 rounded-full border border-black/10 bg-white/55 backdrop-blur-xl text-sm text-black/85 outline-none flex items-center gap-2"
+        aria-label="単語セットを開く"
       >
-        <option>英単語用</option>
-        <option>英熟語用</option>
-      </select>
+        {currentWordSet}
+        <span className="text-black/55">⌄</span>
+      </button>
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className="h-10 w-10 rounded-full border border-black/10 bg-white/55 backdrop-blur-xl flex items-center justify-center text-black/65"
-          aria-label="設定"
-        >
-          <SettingsIcon />
-        </button>
         <button
           type="button"
           className="h-10 w-10 rounded-full border border-black/10 bg-white/55 backdrop-blur-xl flex items-center justify-center text-black/65"

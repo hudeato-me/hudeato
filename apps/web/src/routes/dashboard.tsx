@@ -5,6 +5,7 @@ import { Footer } from '~/components/Footer'
 import { Header } from '~/components/Header'
 import { RecentWordItem } from '~/components/dashboard/RecentWordItem'
 import { StatCard } from '~/components/dashboard/StatCard'
+import { WordSetDrawer } from '~/components/dashboard/WordSetDrawer'
 import { authClient } from '~/lib/auth-client'
 
 export const Route = createFileRoute('/dashboard')({
@@ -25,6 +26,8 @@ function DashboardPage() {
   const navigate = useNavigate()
   const [session, setSession] = useState<UserSession | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isWordSetDrawerOpen, setIsWordSetDrawerOpen] = useState(false)
+  const [selectedWordSet, setSelectedWordSet] = useState('英単語用')
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -93,10 +96,16 @@ function DashboardPage() {
     },
   ]
 
+  const wordSets = ['英単語用', '言葉集め用', '専門用語', 'ビジネス用語']
+
   return (
     <div className="min-h-screen bg-white text-black/80">
       <main className="max-w-[430px] mx-auto px-4 pt-5 pb-30 space-y-5">
-        <Header onLogout={handleLogout} />
+        <Header
+          onLogout={handleLogout}
+          currentWordSet={selectedWordSet}
+          onOpenWordSet={() => setIsWordSetDrawerOpen(true)}
+        />
 
         <section className="grid grid-cols-3 gap-3">
           <StatCard label="Words" value={stats.words} cardClass="bg-black/2" />
@@ -113,6 +122,14 @@ function DashboardPage() {
           ))}
         </section>
       </main>
+
+      <WordSetDrawer
+        open={isWordSetDrawerOpen}
+        selectedSet={selectedWordSet}
+        sets={wordSets}
+        onClose={() => setIsWordSetDrawerOpen(false)}
+        onSelect={setSelectedWordSet}
+      />
 
       <Footer />
     </div>

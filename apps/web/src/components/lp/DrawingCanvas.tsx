@@ -145,8 +145,8 @@ export function DrawingCanvas() {
     }
 
     // マウス操作に応じて、関数を実行
-    canvas.addEventListener('mousedown', startDrawing)
-    canvas.addEventListener('touchstart', startDrawing, { passive: false })
+    window.addEventListener('mousedown', startDrawing)
+    window.addEventListener('touchstart', startDrawing, { passive: false })
 
     // 移動と終了はWindow全体で監視
     window.addEventListener('mousemove', draw)
@@ -158,8 +158,8 @@ export function DrawingCanvas() {
       window.removeEventListener('resize', resizeCanvas)
       if (requestRef.current) cancelAnimationFrame(requestRef.current)
 
-      canvas.removeEventListener('mousedown', startDrawing)
-      canvas.removeEventListener('touchstart', startDrawing)
+      window.removeEventListener('mousedown', startDrawing)
+      window.removeEventListener('touchstart', startDrawing)
       window.removeEventListener('mousemove', draw)
       window.removeEventListener('touchmove', draw)
       window.removeEventListener('mouseup', stopDrawing)

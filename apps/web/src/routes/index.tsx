@@ -27,7 +27,7 @@ function Home() {
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto flex max-w-2xl flex-col items-center px-6 pt-32 pb-24 md:pt-40 pointer-events-none">
+      <main className="relative z-10 mx-auto flex max-w-2xl flex-col items-center px-6 pt-32 pb-24 md:pt-40">
         
         <h1 className="text-5xl md:text-6xl font-bold text-slate-800 tracking-tight mb-12" style={{ fontFamily: 'Comfortaa, sans-serif' }}>
           hudeato.me
@@ -43,7 +43,7 @@ function Home() {
         
         <div className="mt-24 flex flex-col gap-10 text-center leading-loose text-slate-600 md:text-lg">
           <p>
-            hudeato（ふであと）は、日常で出会った「言葉」を集めるための
+            hudeato(ふであと)は、日常で出会った「言葉」を集めるための
             <br className="hidden md:inline" />
             シンプルな言葉収集アプリです。
           </p>
@@ -123,7 +123,7 @@ function Home() {
         </div>
       </main>
 
-      <footer className="relative z-10 py-12 text-center text-xs text-slate-400 pointer-events-none">
+      <footer className="relative z-10 py-12 text-center text-xs text-slate-400">
         © {new Date().getFullYear()} hudeato.me
       </footer>
 

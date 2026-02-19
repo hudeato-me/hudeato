@@ -5,7 +5,7 @@ import { Footer } from '~/components/Footer'
 import { Header } from '~/components/Header'
 import { RecentWordItem } from '~/components/dashboard/RecentWordItem'
 import { StatCard } from '~/components/dashboard/StatCard'
-import { WordSetDrawer } from '~/components/dashboard/WordSetDrawer'
+import { WordSetDrawer } from '~/components/wordset/WordSetDrawer'
 import { authClient } from '~/lib/auth-client'
 
 export const Route = createFileRoute('/dashboard')({

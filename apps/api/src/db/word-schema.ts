@@ -39,7 +39,6 @@ export const word = sqliteTable(
       .notNull()
       .references(() => wordSet.id, { onDelete: "cascade" }),
     text: text("text").notNull(),
-    primaryMeaning: text("primary_meaning"),
     locationLabel: text("location_label"),
     imageKey: text("image_key"),
     isMastered: integer("is_mastered", { mode: "boolean" })
@@ -85,6 +84,7 @@ export const wordMeaning = sqliteTable(
     source: text("source"),
     // 意味の番号
     slot: integer("slot").notNull(),
+    // 4択クイズで必要→全ての意味がisRemembered: trueになったら、isMastered: true
     isRemembered: integer("is_remembered", { mode: "boolean" })
       .default(false)
       .notNull(),

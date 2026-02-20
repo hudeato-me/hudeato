@@ -1,0 +1,1 @@
+ALTER TABLE `word` DROP COLUMN `primary_meaning`;

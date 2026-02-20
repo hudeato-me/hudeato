@@ -124,9 +124,15 @@ importers:
       '@tanstack/react-start':
         specifier: ^1.160.0
         version: 1.161.0(crossws@0.4.4(srvx@0.10.1))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vite@7.3.1(@types/node@22.19.11)(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      api:
+        specifier: workspace:*
+        version: link:../api
       better-auth:
         specifier: ^1.4.18
         version: 1.4.18(@tanstack/react-start@1.161.0(crossws@0.4.4(srvx@0.10.1))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vite@7.3.1(@types/node@22.19.11)(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)))(drizzle-kit@0.31.9)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260218.0)(@libsql/client@0.17.0)(@upstash/redis@1.36.2)(kysely@0.28.11))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vitest@4.0.18(@types/node@22.19.11)(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      hono:
+        specifier: ^4.0.0
+        version: 4.11.9
       react:
         specifier: ^19.0.0
         version: 19.2.4

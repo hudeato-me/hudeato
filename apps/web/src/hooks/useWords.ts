@@ -73,7 +73,42 @@ export const useDashboard = (wordSetId: string, enabled = true) =>
 				const err = await res.json() as { error?: string };
 				throw new Error(err.error ?? `API Error: ${res.status}`);
 			}
-			return res.json();
+			const data = await res.json();
+
+			// Streakの計算
+			let streak = 0;
+			if (data.activityTimestamps && data.activityTimestamps.length > 0) {
+				const activeDates = new Set<string>();
+				data.activityTimestamps.forEach((ts) => {
+					const d = new Date(ts);
+					activeDates.add(`${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`);
+				});
+
+				const today = new Date();
+				const yesterday = new Date(today);
+				yesterday.setDate(yesterday.getDate() - 1);
+
+				const formatDate = (d: Date) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+
+				let checkDate = new Date(today);
+
+				if (activeDates.has(formatDate(today))) {
+					streak = 1;
+					checkDate.setDate(checkDate.getDate() - 1);
+				} else if (activeDates.has(formatDate(yesterday))) {
+					streak = 1;
+					checkDate.setDate(yesterday.getDate() - 1);
+				}
+
+				if (streak > 0) {
+					while (activeDates.has(formatDate(checkDate))) {
+						streak++;
+						checkDate.setDate(checkDate.getDate() - 1);
+					}
+				}
+			}
+
+			return { ...data, streak };
 		},
 		enabled: enabled && !!wordSetId,
 	});

@@ -67,7 +67,7 @@ function DashboardPage() {
   const stats = {
     words: dashboardData?.totalWords ?? 0,
     mastered: dashboardData?.masteredWords ?? 0,
-    streak: 21,
+    streak: dashboardData?.streak ?? 0,
   }
 
   const recentWords = dashboardData?.recentWords ?? []

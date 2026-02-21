@@ -111,3 +111,17 @@ export const findWordById = async (db: Db, userId: string, wordId: string) => {
 		},
 	});
 };
+
+// 過去70日分の単語の作成日時（タイムスタンプ）を取得
+export const getActivityTimestamps = async (db: Db, userId: string) => {
+	const result = await db.query.word.findMany({
+		where: and(
+			eq(word.userId, userId),
+			sql`${word.createdAt} >= (cast(unixepoch('now', '-70 days') * 1000 as integer))`
+		),
+		columns: {
+			createdAt: true,
+		},
+	});
+	return result.map((r) => r.createdAt);
+};

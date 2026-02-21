@@ -91,7 +91,7 @@ function DashboardPage() {
           <StatCard label="Streak" value={stats.streak} cardClass="bg-black/6" />
         </section>
 
-        <Activity />
+        <Activity timestamps={dashboardData?.activityTimestamps ?? []} />
 
         <section className="space-y-3">
           <div className="text-[1rem] leading-none text-black/60 px-1">Recent Words</div>

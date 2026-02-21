@@ -5,6 +5,7 @@ import {
 	findWordById,
 	findWords,
 	findWordsBySet,
+	getActivityTimestamps,
 } from "./repository";
 
 type Db = ReturnType<typeof createDb>;
@@ -64,14 +65,16 @@ export const getDashboard = async (
 	userId: string,
 	wordSetId: string,
 ) => {
-	const [counts, recentWords] = await Promise.all([
+	const [counts, recentWords, activityTimestamps] = await Promise.all([
 		countData(db, userId),
 		findWordsBySet(db, userId, wordSetId, { limit: 10 }),
+		getActivityTimestamps(db, userId),
 	]);
 
 	const summary = {
 		totalWords: counts.total,
 		masteredWords: counts.mastered,
+		activityTimestamps,
 		recentWords: recentWords.map((item) => ({
 			id: item.id,
 			text: item.text,

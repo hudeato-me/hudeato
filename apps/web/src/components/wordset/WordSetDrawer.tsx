@@ -2,15 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 
 interface WordSetDrawerProps {
   open: boolean
-  selectedSet: string
-  sets: string[]
+  selectedSetId: string
+  sets: { id: string; name: string }[]
   onClose: () => void
-  onSelect: (setName: string) => void
+  onSelect: (setId: string) => void
 }
 
 export function WordSetDrawer({
   open,
-  selectedSet,
+  selectedSetId,
   sets,
   onClose,
   onSelect,
@@ -109,19 +109,19 @@ export function WordSetDrawer({
         <h2 className="text-[1.2rem] font-semibold text-black/90 mb-4">単語セット</h2>
 
         <ul className="space-y-1">
-          {sets.map((setName) => {
-            const active = setName === selectedSet
+          {sets.map((set) => {
+            const active = set.id === selectedSetId
             return (
-              <li key={setName}>
+              <li key={set.id}>
                 <button
                   type="button"
                   className="w-full h-14 px-2 rounded-xl flex items-center justify-between text-left"
                   onClick={() => {
-                    onSelect(setName)
+                    onSelect(set.id)
                     onClose()
                   }}
                 >
-                  <span className="text-sm text-black/80">{setName}</span>
+                  <span className="text-sm text-black/80">{set.name}</span>
                   <span className="text-base text-black/75">{active ? '✓' : '⋯'}</span>
                 </button>
               </li>

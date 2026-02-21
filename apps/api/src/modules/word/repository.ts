@@ -1,0 +1,113 @@
+import { and, asc, count, desc, eq, sql } from "drizzle-orm";
+import { createDb, wordMeaning } from "../../db";
+import { word } from "../../db";
+
+type Db = ReturnType<typeof createDb>;
+
+// クエリの関数を定義
+
+// 全てのセットから単語を取得
+// 単語・意味・createdAt・updatedAtを返す
+export const findWords = async (db: Db, userId: string) => {
+	return db.query.word.findMany({
+		where: eq(word.userId, userId),
+		orderBy: [desc(word.createdAt)],
+		columns: {
+			id: true,
+			text: true,
+			createdAt: true,
+			updatedAt: true,
+		},
+		with: {
+			meanings: {
+				orderBy: [asc(wordMeaning.slot)],
+				columns: {
+					meaning: true,
+				},
+			},
+		},
+	});
+};
+
+// セット内の単語を取得
+export const findWordsBySet = async (
+	db: Db,
+	userId: string,
+	wordSetId: string,
+	options?: { limit?: number },
+) => {
+	return db.query.word.findMany({
+		where: and(eq(word.userId, userId), eq(word.wordSetId, wordSetId)),
+		orderBy: [desc(word.createdAt)],
+		...(options?.limit ? { limit: options.limit } : {}),
+		columns: {
+			id: true,
+			text: true,
+			isMastered: true,
+			createdAt: true,
+			updatedAt: true,
+		},
+		with: {
+			meanings: {
+				orderBy: [asc(wordMeaning.slot)],
+				columns: {
+					meaning: true,
+					partOfSpeech: true,
+				},
+			},
+		},
+	});
+};
+
+// ダッシュボード用に全セットのWordsとMasteredをSQLで集計
+export const countData = async (db: Db, userId: string) => {
+	const result = await db
+		.select({
+			total: count(),
+			mastered: count(sql`CASE WHEN ${word.isMastered} = true THEN 1 END`),
+		})
+		.from(word)
+		.where(eq(word.userId, userId));
+
+	return {
+		total: result[0].total,
+		mastered: result[0].mastered,
+	};
+};
+
+// 単語の取得
+export const findWordById = async (db: Db, userId: string, wordId: string) => {
+	return db.query.word.findFirst({
+		where: and(eq(word.userId, userId), eq(word.id, wordId)),
+		columns: {
+			id: true,
+			wordSetId: true,
+			text: true,
+			locationLabel: true,
+			imageKey: true,
+			isMastered: true,
+			lastReviewedAt: true,
+			createdAt: true,
+			updatedAt: true,
+		},
+		with: {
+			meanings: {
+				orderBy: [asc(wordMeaning.slot)],
+				columns: {
+					meaning: true,
+					partOfSpeech: true,
+					phonetic: true,
+					example: true,
+					collocation: true,
+					synonym: true,
+					etymology: true,
+					source: true,
+					slot: true,
+					isRemembered: true,
+					createdAt: true,
+					updatedAt: true,
+				},
+			},
+		},
+	});
+};

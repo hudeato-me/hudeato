@@ -123,5 +123,5 @@ export const getActivityTimestamps = async (db: Db, userId: string) => {
 			createdAt: true,
 		},
 	});
-	return result.map((r) => r.createdAt);
+	return result.map((r) => r.createdAt?.getTime() ?? 0);
 };

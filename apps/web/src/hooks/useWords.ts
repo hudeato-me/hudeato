@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { client } from "~/lib/api-client";
 
 // クエリキーの管理
@@ -20,6 +20,7 @@ export const useWords = (enabled = true) =>
 	useQuery({
 		queryKey: wordKeys.all,
 		queryFn: async () => {
+			console.log('fetch! useWords');
 			const res = await client.api.words.$get();
 			if (!res.ok) {
 				const err = await res.json() as { error?: string };
@@ -28,12 +29,14 @@ export const useWords = (enabled = true) =>
 			return res.json();
 		},
 		enabled,
+		staleTime: 1000 * 60 * 5, // 5 minutes
 	});
 // セットごとに単語取得
 export const useWordsBySet = (wordSetId: string, enabled = true) =>
 	useQuery({
 		queryKey: wordKeys.bySet(wordSetId),
 		queryFn: async () => {
+			console.log('fetch! useWordsBySet', wordSetId);
 			const res = await client.api.words.wordSet[":wordSetId"].$get({
 				param: { wordSetId },
 			});
@@ -44,12 +47,15 @@ export const useWordsBySet = (wordSetId: string, enabled = true) =>
 			return res.json();
 		},
 		enabled: enabled && !!wordSetId,
+		staleTime: 1000 * 60 * 5, // 5 minutes
 	});
 // 単語の単体取得
-export const useWord = (wordId: string, enabled = true) =>
-	useQuery({
+export const useWord = (wordId: string, enabled = true) => {
+	const queryClient = useQueryClient();
+	return useQuery({
 		queryKey: wordKeys.single(wordId),
 		queryFn: async () => {
+			console.log('fetch! useWord', wordId);
 			const res = await client.api.words[":wordId"].$get({
 				param: { wordId },
 			});
@@ -60,12 +66,28 @@ export const useWord = (wordId: string, enabled = true) =>
 			return res.json();
 		},
 		enabled: enabled && !!wordId,
+		staleTime: 1000 * 60 * 5, // 5 minutes
+		// placeholderData: キャッシュには保存されず、バックグラウンドfetchは常に実行される
+		// initialData にすると staleTime が適用されて詳細fetchがスキップされる致命的バグになる
+		placeholderData: () => {
+			// 全件リストから探す
+			const allWords = queryClient.getQueryData<any[]>(wordKeys.all);
+			const foundInAll = allWords?.find((w: any) => w.id === wordId);
+			if (foundInAll) return foundInAll;
+
+			return undefined;
+		},
 	});
+};
 // ダッシュボード
 export const useDashboard = (wordSetId: string, enabled = true) =>
 	useQuery({
 		queryKey: wordKeys.dashboard(wordSetId),
+		// 常に再取得するが、GCに残っている間はそれを表示(Stale-While-Revalidate)
+		staleTime: 0, 
+		gcTime: 1000 * 60 * 30, // 30 mins
 		queryFn: async () => {
+			console.log('fetch! useDashboard', wordSetId);
 			const res = await client.api.dashboard.summary.$get({
 				query: { wordSetId },
 			});
@@ -97,7 +119,8 @@ export const useDashboard = (wordSetId: string, enabled = true) =>
 					checkDate.setDate(checkDate.getDate() - 1);
 				} else if (activeDates.has(formatDate(yesterday))) {
 					streak = 1;
-					checkDate.setDate(yesterday.getDate() - 1);
+					checkDate = new Date(yesterday);
+					checkDate.setDate(checkDate.getDate() - 1);
 				}
 
 				if (streak > 0) {
@@ -118,6 +141,7 @@ export const useWordSets = (enabled = true) =>
 	useQuery({
 		queryKey: wordSetKeys.all,
 		queryFn: async () => {
+			console.log('fetch! useWordSets');
 			const res = await client.api.wordSets.$get();
 			if (!res.ok) {
 				const err = await res.json() as { error?: string };
@@ -125,5 +149,6 @@ export const useWordSets = (enabled = true) =>
 			}
 			return res.json();
 		},
+		staleTime: Infinity, // 永続キャッシュ (明示的にinvalidateしない限りリフェッチしない)
 		enabled,
 	});

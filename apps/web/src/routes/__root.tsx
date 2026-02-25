@@ -4,12 +4,13 @@ import {
     Scripts,
     createRootRoute,
 } from '@tanstack/react-router'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import * as React from 'react'
 import { DefaultCatchBoundary } from '~/components/DefaultCatchBoundary'
 import { NotFound } from '~/components/NotFound'
 import appCss from '~/styles/app.css?url'
 import { seo } from '~/utils/seo'
+import { queryClient, asyncPersister } from '~/lib/query-client'
 
 export const Route = createRootRoute({
   head: () => ({
@@ -54,8 +55,6 @@ export const Route = createRootRoute({
   shellComponent: RootDocument,
 })
 
-const queryClient = new QueryClient()
-
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja">
@@ -63,7 +62,16 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        <PersistQueryClientProvider
+          client={queryClient}
+          persistOptions={{
+            persister: asyncPersister,
+            maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+            buster: 'v1',
+          }}
+        >
+          {children}
+        </PersistQueryClientProvider>
         <Scripts />
       </body>
     </html>

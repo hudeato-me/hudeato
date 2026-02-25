@@ -8,7 +8,6 @@ const wordSets = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }
 	.get("/", async (c) => {
 		const result = await getWordSets(
 			c.get("db"),
-			c.get("redisParams"),
 			c.get("userId"),
 		);
 		return c.json(result);

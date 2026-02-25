@@ -11,7 +11,7 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 
 	// 全てのセットの単語を取得
 	.get("/", async (c) => {
-		const result = await getWords(c.get("db"), c.get("redisParams"), c.get("userId"));
+		const result = await getWords(c.get("db"), c.get("userId"));
 		return c.json(result);
 	})
 	// セット内の単語を取得
@@ -22,7 +22,6 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 			const { wordSetId } = c.req.valid("param");
 			const result = await getWords(
 				c.get("db"),
-				c.get("redisParams"),
 				c.get("userId"),
 				{ wordSetId },
 			);
@@ -37,7 +36,6 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 			const { wordId } = c.req.valid("param");
 			const result = await getWordById(
 				c.get("db"),
-				c.get("redisParams"),
 				c.get("userId"),
 				wordId,
 			);

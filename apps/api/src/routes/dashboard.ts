@@ -14,7 +14,6 @@ const dashboard = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables 
 			const { wordSetId } = c.req.valid("query");
 			const summary = await getDashboard(
 				c.get("db"),
-				c.get("redisParams"),
 				c.get("userId"),
 				wordSetId,
 			);

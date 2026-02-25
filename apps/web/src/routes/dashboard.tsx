@@ -9,6 +9,8 @@ import { StatCard } from '~/components/dashboard/StatCard'
 import { WordSetDrawer } from '~/components/wordset/WordSetDrawer'
 // authentication client
 import { authClient } from '~/lib/auth-client'
+// query client
+import { queryClient } from '~/lib/query-client'
 // custom hooks
 import { useDashboard, useWordSets } from '~/hooks/useWords'
 
@@ -53,7 +55,6 @@ function DashboardPage() {
       setSelectedWordSetId(wordSets[0].id)
     }
   }, [wordSets, selectedWordSetId])
-  // dashboardの情報をうけと
 
   const {
     data: dashboardData,
@@ -82,6 +83,7 @@ function DashboardPage() {
           onOpenWordSet={() => setIsWordSetDrawerOpen(true)}
           onLogout={async () => {
             await authClient.signOut()
+            queryClient.clear()
           }}
         />
 

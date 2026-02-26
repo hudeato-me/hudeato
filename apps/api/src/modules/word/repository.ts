@@ -2,11 +2,11 @@ import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 import { createDb, wordMeaning } from "../../db";
 import { word } from "../../db";
 
-type Db = ReturnType<typeof createDb>;
+import { Db } from "../../types/words-route-type";
 
-// クエリの関数を定義
+// SQLクエリの関数を定義
 
-// 全てのセットから単語を取得
+// 全てのセットから単語を取得（いつ使うか分からないけど）
 // 単語・意味・createdAt・updatedAtを返す
 export const findWords = async (db: Db, userId: string) => {
 	return db.query.word.findMany({
@@ -29,7 +29,7 @@ export const findWords = async (db: Db, userId: string) => {
 	});
 };
 
-// セット内の単語を取得
+// セット内の単語を取得（Recent Wordsと一覧リスト用・ページネーション未実装）
 export const findWordsBySet = async (
 	db: Db,
 	userId: string,
@@ -75,7 +75,7 @@ export const countData = async (db: Db, userId: string) => {
 	};
 };
 
-// 単語の取得
+// 単語の取得（単語編集ページ用）
 export const findWordById = async (db: Db, userId: string, wordId: string) => {
 	return db.query.word.findFirst({
 		where: and(eq(word.userId, userId), eq(word.id, wordId)),
@@ -112,7 +112,7 @@ export const findWordById = async (db: Db, userId: string, wordId: string) => {
 	});
 };
 
-// 過去70日分の単語の作成日時（タイムスタンプ）を取得
+// 過去70日分の単語の作成日時を取得（Activity用）
 export const getActivityTimestamps = async (db: Db, userId: string) => {
 	const result = await db.query.word.findMany({
 		where: and(

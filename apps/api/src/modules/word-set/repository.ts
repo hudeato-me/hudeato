@@ -1,7 +1,9 @@
 import { desc, eq } from "drizzle-orm";
 import { createDb, wordSet } from "../../db";
 
-type Db = ReturnType<typeof createDb>;
+import { Db } from "../../types/words-route-type";
+
+// SQLクエリの関数を定義
 
 // ユーザーのwordSet一覧を取得
 export const findWordSets = async (db: Db, userId: string) => {

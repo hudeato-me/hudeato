@@ -7,8 +7,11 @@ import {
 	getActivityTimestamps,
 } from "./repository";
 
-type Db = ReturnType<typeof createDb>;
+import { Db } from "../../types/words-route-type";
 
+// サービス関数を定義
+
+// 単語一覧を取得
 export const getWords = async (
 	db: Db,
 	userId: string,
@@ -25,6 +28,7 @@ export const getWords = async (
 	}
 };
 
+// 単語詳細情報を取得
 export const getWordById = async (
 	db: Db,
 	userId: string,
@@ -36,6 +40,7 @@ export const getWordById = async (
 	return word;
 };
 
+// ダッシュボードの情報を取得
 export const getDashboard = async (
 	db: Db,
 	userId: string,

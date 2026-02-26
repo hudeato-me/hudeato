@@ -8,7 +8,7 @@ import { handlePolarWebhook } from "./polar";
 import { Bindings, WordsRouteVariables } from "./types";
 import words from "./routes/words";
 import dashboard from "./routes/dashboard";
-import wordSets from "./routes/wordSets";
+import wordSets from "./routes/word-sets";
 
 const app = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>();
 

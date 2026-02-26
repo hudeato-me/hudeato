@@ -6,6 +6,7 @@ export const client = hc<AppType>("http://localhost:8787", {
 	init: { credentials: "include" },
 
 	// 401を一括キャッチしてログイン画面へリダイレクト
+	// protectedMiddleware関数で帰ってくる401をキャッチしてリダイレクトさせるための処理
 	fetch: async (input: RequestInfo | URL, requestInit?: RequestInit) => {
 		const res = await fetch(input, requestInit);
 		if (res.status === 401) {

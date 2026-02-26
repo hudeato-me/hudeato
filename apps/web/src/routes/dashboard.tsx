@@ -1,5 +1,5 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 // components
 import { Activity } from '~/components/dashboard/Activity'
 import { Footer } from '~/components/Footer'
@@ -10,19 +10,19 @@ import { WordSetDrawer } from '~/components/wordset/WordSetDrawer'
 // authentication client
 import { authClient } from '~/lib/auth-client'
 // query client
-import { queryClient } from '~/lib/query-client'
+import { useQueryClient } from '@tanstack/react-query'
 // custom hooks
-import { useDashboard, useWordSets } from '~/hooks/useWords'
+import { useDashboard, useWordSets } from '~/hooks/use-words'
 
 type Session = typeof authClient.$Infer.Session
 
 export const Route = createFileRoute('/dashboard')({
-  // コンポーネントが描画される前に実行されるガード処理
+  // コンポーネントが描画される前の処理
   beforeLoad: async () => {
     // エラーが起きた場合はnullを返すようにフォールバック
     const result = await authClient.getSession().catch(() => null)
 
-    // userがいなかったりエラーが起きれば、ログインページに遷移
+    // 画面読み込み時にuserがいなかったりエラーが起きれば、ログインページに遷移→ダッシュボード画面をそもそも表示させない
     if (!result?.data?.user) {
       throw redirect({ to: '/login' })
     }
@@ -40,21 +40,20 @@ export const Route = createFileRoute('/dashboard')({
 })
 
 function DashboardPage() {
-  // useStateやuseEffectの代わりに、beforeLoadから安全にsessionを受け取る
+  const queryClient = useQueryClient()
+  // beforeLoadからsession情報を受け取る
   const { session } = Route.useRouteContext()
-  
+  // ドロワーの開閉状態
   const [isWordSetDrawerOpen, setIsWordSetDrawerOpen] = useState(false)
-  const [selectedWordSetId, setSelectedWordSetId] = useState<string | null>(null)
 
   // wordSet一覧の取得（beforeLoadを通っている時点でsessionは確実にあるため true固定）
   const { data: wordSets = [] } = useWordSets(true)
 
-  // 初回ロード時に最初のセットを選択
-  useEffect(() => {
-    if (wordSets.length > 0 && !selectedWordSetId) {
-      setSelectedWordSetId(wordSets[0].id)
-    }
-  }, [wordSets, selectedWordSetId])
+  // 選択中のwordSetIdのstateの管理
+  const [selectedIdState, setSelectedIdState] = useState<string | null>(null)
+
+  // 実際に使用するID→最初のロード時は、selectedIdStateがnullなので、wordSets[0]?.id（つまり一番上のセット）が選ばれる
+  const selectedWordSetId = selectedIdState ?? wordSets[0]?.id ?? null
 
   const {
     data: dashboardData,
@@ -125,7 +124,7 @@ function DashboardPage() {
         selectedSetId={selectedWordSetId ?? ''}
         sets={wordSets}
         onClose={() => setIsWordSetDrawerOpen(false)}
-        onSelect={setSelectedWordSetId}
+        onSelect={setSelectedIdState}
       />
 
       <Footer />

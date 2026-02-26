@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { Bindings, WordsRouteVariables } from "../types";
-import { getWordSets } from "../modules/wordSet/service";
+import { getWordSets } from "../modules/word-set/service";
 
 const wordSets = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 

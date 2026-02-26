@@ -1,16 +1,17 @@
 /// <reference types="vite/client" />
 import {
-    HeadContent,
-    Scripts,
-    createRootRoute,
+  HeadContent,
+  Scripts,
+  createRootRoute,
 } from '@tanstack/react-router'
-import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { persistQueryClient } from '@tanstack/react-query-persist-client'
 import * as React from 'react'
 import { DefaultCatchBoundary } from '~/components/DefaultCatchBoundary'
 import { NotFound } from '~/components/NotFound'
 import appCss from '~/styles/app.css?url'
 import { seo } from '~/utils/seo'
-import { queryClient, asyncPersister } from '~/lib/query-client'
+import { createQueryClient, asyncPersister } from '~/lib/query-client'
 
 export const Route = createRootRoute({
   head: () => ({
@@ -56,22 +57,27 @@ export const Route = createRootRoute({
 })
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  // SSR環境でのリクエスト間状態汚染を防ぐため、コンポーネント内で初期化する
+  const [queryClient] = React.useState(() => createQueryClient())
+
+  React.useEffect(() => {
+    persistQueryClient({
+      queryClient,
+      persister: asyncPersister,
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      buster: 'v1',
+    })
+  }, [])
+
   return (
     <html lang="ja">
       <head>
         <HeadContent />
       </head>
       <body>
-        <PersistQueryClientProvider
-          client={queryClient}
-          persistOptions={{
-            persister: asyncPersister,
-            maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-            buster: 'v1',
-          }}
-        >
+        <QueryClientProvider client={queryClient}>
           {children}
-        </PersistQueryClientProvider>
+        </QueryClientProvider>
         <Scripts />
       </body>
     </html>

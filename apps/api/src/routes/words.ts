@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { Bindings, WordsRouteVariables } from "../types";
 import { getWordById, getWords } from "../modules/word/service";
-import { handleZodError } from "../utils/errorValidator";
+import { handleZodError } from "../utils/error-validator";
 
 const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 
@@ -17,6 +17,7 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 	// セット内の単語を取得
 	.get(
 		"/wordSet/:wordSetId",
+		// パスパラメータの検証
 		zValidator("param", z.object({ wordSetId: z.string() }), handleZodError),
 		async (c) => {
 			const { wordSetId } = c.req.valid("param");
@@ -28,9 +29,10 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 			return c.json(result);
 		}
 	)
-	//　単語の取得 
+	//　単語詳細情報の取得 
 	.get(
 		"/:wordId",
+		// パスパラメータの検証
 		zValidator("param", z.object({ wordId: z.string() }), handleZodError),
 		async (c) => {
 			const { wordId } = c.req.valid("param");

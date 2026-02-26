@@ -83,8 +83,7 @@ export const useWord = (wordId: string, enabled = true) => {
 export const useDashboard = (wordSetId: string, enabled = true) =>
 	useQuery({
 		queryKey: wordKeys.dashboard(wordSetId),
-		// 常に再取得するが、GCに残っている間はそれを表示(Stale-While-Revalidate)
-		staleTime: 0, 
+		staleTime: 0,
 		gcTime: 1000 * 60 * 30, // 30 mins
 		queryFn: async () => {
 			console.log('fetch! useDashboard', wordSetId);
@@ -95,25 +94,22 @@ export const useDashboard = (wordSetId: string, enabled = true) =>
 				const err = await res.json() as { error?: string };
 				throw new Error(err.error ?? `API Error: ${res.status}`);
 			}
-			const data = await res.json();
-
-			// Streakの計算
+			return res.json(); // 生データのみ返す
+		},
+		select: (data) => {
+			// Streak計算をselectで行う（常に現在時刻で計算）
 			let streak = 0;
 			if (data.activityTimestamps && data.activityTimestamps.length > 0) {
 				const activeDates = new Set<string>();
-				data.activityTimestamps.forEach((ts) => {
+				data.activityTimestamps.forEach((ts: number) => {
 					const d = new Date(ts);
 					activeDates.add(`${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`);
 				});
-
 				const today = new Date();
 				const yesterday = new Date(today);
 				yesterday.setDate(yesterday.getDate() - 1);
-
 				const formatDate = (d: Date) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-
 				let checkDate = new Date(today);
-
 				if (activeDates.has(formatDate(today))) {
 					streak = 1;
 					checkDate.setDate(checkDate.getDate() - 1);
@@ -122,7 +118,6 @@ export const useDashboard = (wordSetId: string, enabled = true) =>
 					checkDate = new Date(yesterday);
 					checkDate.setDate(checkDate.getDate() - 1);
 				}
-
 				if (streak > 0) {
 					while (activeDates.has(formatDate(checkDate))) {
 						streak++;
@@ -130,7 +125,6 @@ export const useDashboard = (wordSetId: string, enabled = true) =>
 					}
 				}
 			}
-
 			return { ...data, streak };
 		},
 		enabled: enabled && !!wordSetId,

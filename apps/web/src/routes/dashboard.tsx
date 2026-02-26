@@ -82,8 +82,11 @@ function DashboardPage() {
           currentWordSet={selectedWordSetName}
           onOpenWordSet={() => setIsWordSetDrawerOpen(true)}
           onLogout={async () => {
-            await authClient.signOut()
-            queryClient.clear()
+            await authClient.signOut();
+            queryClient.clear();
+            // IndexedDBキャッシュも明示的に消去
+            const { del } = await import('idb-keyval');
+            await del('REACT_QUERY_OFFLINE_CACHE'); // PersistQueryClientProviderのkeyと合わせる
           }}
         />
 

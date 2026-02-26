@@ -67,6 +67,43 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
       buster: 'v1',
     })
+
+    // 開発用: コンソールから window.__checkCache() でキャッシュ状態を確認できる
+    if (import.meta.env.DEV) {
+      (window as any).__checkCache = async () => {
+        const { get } = await import('idb-keyval')
+        const persisted = await get('REACT_QUERY_OFFLINE_CACHE')
+        console.group('[IndexedDB] 永続化キャッシュ')
+        if (!persisted) {
+          console.log('キャッシュなし')
+        } else {
+          const queries = (persisted as any)?.clientState?.queries ?? []
+          queries.forEach((q: any) => {
+            console.group(`🔑 ${q.queryHash}`)
+            console.log('status         :', q.state.status)
+            console.log('data           :', q.state.data)
+            console.log('dataUpdatedAt  :', new Date(q.state.dataUpdatedAt).toLocaleString())
+            console.log('isInvalidated  :', q.state.isInvalidated)
+            console.groupEnd()
+          })
+        }
+        console.groupEnd()
+
+        console.group('[In-Memory] React Query キャッシュ')
+        const inMemory = queryClient.getQueryCache().getAll()
+        inMemory.forEach((q) => {
+          const s = q.state
+          console.group(`🔑 ${JSON.stringify(q.queryKey)}`)
+          console.log('status         :', s.status)
+          console.log('data           :', s.data)
+          console.log('dataUpdatedAt  :', new Date(s.dataUpdatedAt).toLocaleString())
+          console.log('fetchStatus    :', s.fetchStatus)
+          console.groupEnd()
+        })
+        console.groupEnd()
+      }
+      console.log('[dev] window.__checkCache() でキャッシュを確認できます')
+    }
   }, [])
 
   return (

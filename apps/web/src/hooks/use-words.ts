@@ -84,11 +84,19 @@ export const useWord = (wordId: string, enabled = true) => {
 };
 
 // ダッシュボード
-export const useDashboard = (wordSetId: string, enabled = true) =>
-	useQuery({
+export const useDashboard = (wordSetId: string, enabled = true) => {
+	const queryClient = useQueryClient();
+	return useQuery({
 		queryKey: wordKeys.dashboard(wordSetId),
 		queryFn: async () => {
-			console.log('fetch! useDashboard', wordSetId);
+			const cached = queryClient.getQueryState(wordKeys.dashboard(wordSetId));
+			// キャッシュヒット・キャッシュミスの確認
+			if (cached?.data) {
+				console.log('[cache HIT → refetch] useDashboard', wordSetId, '| cached at:', new Date(cached.dataUpdatedAt).toLocaleTimeString());
+			} else {
+				console.log('[cache MISS → fetch] useDashboard', wordSetId);
+			}
+
 			const res = await client.api.dashboard.summary.$get({
 				query: { wordSetId },
 			});
@@ -145,6 +153,7 @@ export const useDashboard = (wordSetId: string, enabled = true) =>
 		staleTime: 0,
 		gcTime: 1000 * 60 * 30, // 30 mins
 	});
+};
 
 // wordSet一覧の取得
 export const useWordSets = (enabled = true) =>

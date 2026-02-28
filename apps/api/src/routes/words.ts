@@ -10,21 +10,28 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 	// /api/words/のroute
 
 	// 全てのセットの単語を取得
-	.get("/", async (c) => {
-		const result = await getWords(c.get("db"), c.get("userId"));
-		return c.json(result);
-	})
+	.get(
+		"/",
+		zValidator("query", z.object({ limit: z.coerce.number().optional().default(50), offset: z.coerce.number().optional().default(0) })),
+		async (c) => {
+			const { limit, offset } = c.req.valid("query");
+			const result = await getWords(c.get("db"), c.get("userId"), { limit, offset });
+			return c.json(result);
+		}
+	)
 	// セット内の単語を取得
 	.get(
-		"/wordSet/:wordSetId",
+		"/word-set/:word-set-id",
 		// パスパラメータの検証
-		zValidator("param", z.object({ wordSetId: z.string() }), handleZodError),
+		zValidator("param", z.object({ "word-set-id": z.string() }), handleZodError),
+		zValidator("query", z.object({ limit: z.coerce.number().optional().default(50), offset: z.coerce.number().optional().default(0) })),
 		async (c) => {
-			const { wordSetId } = c.req.valid("param");
+			const wordSetId = c.req.valid("param")["word-set-id"];
+			const { limit, offset } = c.req.valid("query");
 			const result = await getWords(
 				c.get("db"),
 				c.get("userId"),
-				{ wordSetId },
+				{ wordSetId, limit, offset },
 			);
 			return c.json(result);
 		}
@@ -41,8 +48,10 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 				c.get("userId"),
 				wordId,
 			);
-			if (!result) return c.json({ error: "Not Found" }, 404);
-			return c.json(result);
+			if (!result) {
+				return c.json({ error: "Not Found", data: null } as const, 404);
+			}
+			return c.json({ error: null, data: result } as const);
 		}
 	);
 

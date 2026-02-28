@@ -1,5 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { client } from "~/lib/api-client";
+const CACHE_STALE_TIME = 5 * 60 * 1000;
+import { Word } from "~/types";
 
 // クエリキーの管理
 // 単語のクエリキー
@@ -20,8 +22,10 @@ export const useWords = (enabled = true) =>
 	useQuery({
 		queryKey: wordKeys.all,
 		queryFn: async () => {
-			console.log('fetch! useWords');
-			const res = await client.api.words.$get();
+
+			const res = await client.api.words.$get({
+				query: {},
+			});
 			if (!res.ok) {
 				const err = await res.json() as { error?: string };
 				throw new Error(err.error ?? `API Error: ${res.status}`);
@@ -29,7 +33,7 @@ export const useWords = (enabled = true) =>
 			return res.json();
 		},
 		enabled,
-		staleTime: 1000 * 60 * 5, // 5 minutes
+		staleTime: CACHE_STALE_TIME,
 	});
 
 // セットごとに単語取得
@@ -37,9 +41,10 @@ export const useWordsBySet = (wordSetId: string, enabled = true) =>
 	useQuery({
 		queryKey: wordKeys.bySet(wordSetId),
 		queryFn: async () => {
-			console.log('fetch! useWordsBySet', wordSetId);
-			const res = await client.api.words.wordSet[":wordSetId"].$get({
-				param: { wordSetId },
+
+			const res = await client.api.words["word-set"][":word-set-id"].$get({
+				param: { "word-set-id": wordSetId },
+				query: {}, // limit/offsetは省略可能だが型上オブジェクトは必要
 			});
 			if (!res.ok) {
 				const err = await res.json() as { error?: string };
@@ -49,7 +54,7 @@ export const useWordsBySet = (wordSetId: string, enabled = true) =>
 		},
 		// wordSetIdがundefinedのときはfetchしない
 		enabled: enabled && !!wordSetId,
-		staleTime: 1000 * 60 * 5, // 5 minutes
+		staleTime: CACHE_STALE_TIME,
 	});
 
 // 単語詳細情報の取得
@@ -58,7 +63,7 @@ export const useWord = (wordId: string, enabled = true) => {
 	return useQuery({
 		queryKey: wordKeys.single(wordId),
 		queryFn: async () => {
-			console.log('fetch! useWord', wordId);
+
 			const res = await client.api.words[":wordId"].$get({
 				param: { wordId },
 			});
@@ -70,13 +75,13 @@ export const useWord = (wordId: string, enabled = true) => {
 		},
 		// wordIdがundefinedのときはfetchしない
 		enabled: enabled && !!wordId,
-		staleTime: 1000 * 60 * 5, // 5 minutes
+		staleTime: CACHE_STALE_TIME,
 		// placeholderDataで表示は即座に行ないつつ、バックグラウンドでfetchして、fetch後画面を更新する
 		placeholderData: () => {
 			// 全件リストから探す
-			const allWords = queryClient.getQueryData<any[]>(wordKeys.all);
-			const foundInAll = allWords?.find((w: any) => w.id === wordId);
-			if (foundInAll) return foundInAll;
+			const allWords = queryClient.getQueryData<Word[]>(wordKeys.all);
+			const foundInAll = allWords?.find((w) => w.id === wordId);
+			if (foundInAll) return { error: null, data: foundInAll } as any;
 
 			return undefined;
 		},
@@ -90,12 +95,6 @@ export const useDashboard = (wordSetId: string, enabled = true) => {
 		queryKey: wordKeys.dashboard(wordSetId),
 		queryFn: async () => {
 			const cached = queryClient.getQueryState(wordKeys.dashboard(wordSetId));
-			// キャッシュヒット・キャッシュミスの確認
-			if (cached?.data) {
-				console.log('[cache HIT → refetch] useDashboard', wordSetId, '| cached at:', new Date(cached.dataUpdatedAt).toLocaleTimeString());
-			} else {
-				console.log('[cache MISS → fetch] useDashboard', wordSetId);
-			}
 
 			const res = await client.api.dashboard.summary.$get({
 				query: { wordSetId },
@@ -150,7 +149,7 @@ export const useDashboard = (wordSetId: string, enabled = true) => {
 			return { ...data, streak };
 		},
 		enabled: enabled && !!wordSetId,
-		staleTime: 0,
+		staleTime: 1000 * 60, // 1 min
 		gcTime: 1000 * 60 * 30, // 30 mins
 	});
 };
@@ -160,8 +159,8 @@ export const useWordSets = (enabled = true) =>
 	useQuery({
 		queryKey: wordSetKeys.all,
 		queryFn: async () => {
-			console.log('fetch! useWordSets');
-			const res = await client.api.wordSets.$get();
+
+			const res = await client.api["word-sets"].$get();
 			if (!res.ok) {
 				const err = await res.json() as { error?: string };
 				throw new Error(err.error ?? `API Error: ${res.status}`);

@@ -13,6 +13,7 @@ import { authClient } from '~/lib/auth-client'
 import { useQueryClient } from '@tanstack/react-query'
 // custom hooks
 import { useDashboard, useWordSets } from '~/hooks/use-words'
+import type { WordSet } from '~/types'
 
 type Session = typeof authClient.$Infer.Session
 
@@ -72,7 +73,7 @@ function DashboardPage() {
 
   const recentWords = dashboardData?.recentWords ?? []
 
-  const selectedWordSetName = wordSets.find((s) => s.id === selectedWordSetId)?.name ?? ''
+  const selectedWordSetName = wordSets.find((s: WordSet) => s.id === selectedWordSetId)?.name ?? ''
 
   return (
     <div className="min-h-screen bg-white text-black/80">

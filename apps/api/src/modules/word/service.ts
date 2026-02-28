@@ -15,15 +15,15 @@ import { Db } from "../../types/words-route-type";
 export const getWords = async (
 	db: Db,
 	userId: string,
-	options?: { wordSetId?: string },
+	options?: { wordSetId?: string; limit?: number; offset?: number },
 ) => {
 	const wordSetId = options?.wordSetId;
 
 	if (wordSetId) {
-		const words = await findWordsBySet(db, userId, wordSetId);
+		const words = await findWordsBySet(db, userId, wordSetId, options);
 		return words;
 	} else {
-		const words = await findWords(db, userId);
+		const words = await findWords(db, userId, options);
 		return words;
 	}
 };
@@ -61,7 +61,8 @@ export const getDashboard = async (
 			text: item.text,
 			createdAt: item.createdAt,
 			updatedAt: item.updatedAt,
-			meaning: item.meanings[0]?.meaning ?? null,
+			// 複数の意味を,で結合して返す
+			meaning: item.meanings.length > 0 ? item.meanings.map(m => m.meaning).join(", ") : null,
 		})),
 	};
 	return summary;

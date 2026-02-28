@@ -8,10 +8,13 @@ import { Db } from "../../types/words-route-type";
 
 // 全てのセットから単語を取得（いつ使うか分からないけど）
 // 単語・意味・createdAt・updatedAtを返す
-export const findWords = async (db: Db, userId: string) => {
+// limitとoffsetでページネーション追加
+export const findWords = async (db: Db, userId: string, options?: { limit?: number; offset?: number }) => {
 	return db.query.word.findMany({
 		where: eq(word.userId, userId),
 		orderBy: [desc(word.createdAt)],
+		...(options?.limit ? { limit: options.limit } : {}),
+		...(options?.offset ? { offset: options.offset } : {}),
 		columns: {
 			id: true,
 			text: true,
@@ -34,12 +37,13 @@ export const findWordsBySet = async (
 	db: Db,
 	userId: string,
 	wordSetId: string,
-	options?: { limit?: number },
+	options?: { limit?: number; offset?: number },
 ) => {
 	return db.query.word.findMany({
 		where: and(eq(word.userId, userId), eq(word.wordSetId, wordSetId)),
 		orderBy: [desc(word.createdAt)],
 		...(options?.limit ? { limit: options.limit } : {}),
+		...(options?.offset ? { offset: options.offset } : {}),
 		columns: {
 			id: true,
 			text: true,

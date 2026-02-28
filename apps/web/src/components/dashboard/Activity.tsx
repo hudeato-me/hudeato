@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
 import { ActivityDot } from './ActivityDot'
+const ACTIVITY_COLUMNS = 10;
+const ACTIVITY_ROWS = 7;
 
 interface ActivityCell {
   id: number
@@ -9,9 +11,13 @@ interface ActivityCell {
 }
 
 export function Activity({ timestamps }: { timestamps: number[] }) {
+  // 日付を2026-02-07のような形式にフォーマットする関数
+  const formatDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
   const activityCells = useMemo(() => {
-    const columns = 10
-    const rows = 7
+    const columns = ACTIVITY_COLUMNS
+    const rows = ACTIVITY_ROWS
     const totalCells = columns * rows
 
     // 今日の日付の0時0分0秒を取得
@@ -28,7 +34,7 @@ export function Activity({ timestamps }: { timestamps: number[] }) {
     const countsByDate = new Map<string, number>()
     timestamps.forEach((ts) => {
       const d = new Date(ts)
-      const dateStr = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+      const dateStr = formatDate(d)
       countsByDate.set(dateStr, (countsByDate.get(dateStr) || 0) + 1)
     })
 
@@ -56,8 +62,7 @@ export function Activity({ timestamps }: { timestamps: number[] }) {
         })
         continue
       }
-
-      const dateStr = `${cellDate.getFullYear()}-${cellDate.getMonth() + 1}-${cellDate.getDate()}`
+      const dateStr = formatDate(cellDate)
       const count = countsByDate.get(dateStr) || 0
 
       // countからlevel(0~4)を計算

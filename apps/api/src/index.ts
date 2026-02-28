@@ -9,6 +9,7 @@ import { Bindings, WordsRouteVariables } from "./types";
 import words from "./routes/words";
 import dashboard from "./routes/dashboard";
 import wordSets from "./routes/word-sets";
+import { rateLimiter } from "./utils/rate-limiter";
 
 const app = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>();
 
@@ -67,10 +68,12 @@ app.on(["POST", "GET"], "/api/auth/*", (c) => {
 
 app.post("/api/webhooks/polar", handlePolarWebhook);
 
+
 const api = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 	.use("*", protectedMiddleware)
+	.use("*", rateLimiter)
 	.route("/words", words)
-	.route("/wordSets", wordSets)
+	.route("/word-sets", wordSets)
 	.route("/dashboard", dashboard);
 
 // .route() の戻り値をチェーンして型を伝搬させる（Hono RPC に必要）

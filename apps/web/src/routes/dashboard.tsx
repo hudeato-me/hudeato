@@ -18,6 +18,8 @@ import type { WordSet } from '~/types'
 type Session = typeof authClient.$Infer.Session
 
 export const Route = createFileRoute('/dashboard')({
+  // キャッシュを生かすため、サーバーサイドレンダリングは行わない
+  ssr: false,
   // コンポーネントが描画される前の処理
   beforeLoad: async () => {
     // エラーが起きた場合はnullを返すようにフォールバック

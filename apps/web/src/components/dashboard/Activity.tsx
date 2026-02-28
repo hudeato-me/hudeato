@@ -87,14 +87,34 @@ export function Activity({ timestamps }: { timestamps: number[] }) {
     return cells
   }, [timestamps])
 
-  // 月のラベルを計算 (1列目、5列目、9列目など、適度に間引いて表示)
+  // 月のラベルを計算（最初の列と、その月の1日目がある列に表示）
   const monthLabels = useMemo(() => {
-    const labels = []
-    for (let col = 0; col < 10; col += 4) {
-      // その列の最初のセル(日曜日)の日付を取得
-      const cell = activityCells[col * 7]
-      if (cell) {
-        const monthStr = cell.date.toLocaleString('en-US', { month: 'short' })
+    const labels: { col: number; label: string }[] = []
+
+    for (let col = 0; col < ACTIVITY_COLUMNS; col++) {
+      let shouldAddLabel = false
+      let monthStr = ''
+
+      if (col === 0) {
+        // 最初の列は常に月を表示
+        const cell = activityCells[0]
+        if (cell) {
+          shouldAddLabel = true
+          monthStr = cell.date.toLocaleString('en-US', { month: 'short' })
+        }
+      } else {
+        // その月の1日目を含む列に月を表示
+        for (let row = 0; row < ACTIVITY_ROWS; row++) {
+          const cell = activityCells[col * ACTIVITY_ROWS + row]
+          if (cell && cell.date.getDate() === 1) {
+            shouldAddLabel = true
+            monthStr = cell.date.toLocaleString('en-US', { month: 'short' })
+            break
+          }
+        }
+      }
+
+      if (shouldAddLabel) {
         labels.push({ col: col + 1, label: monthStr })
       }
     }
@@ -111,7 +131,7 @@ export function Activity({ timestamps }: { timestamps: number[] }) {
         <div />
         <div className="grid grid-cols-10 text-[11px] text-black/30 px-[2px]">
           {monthLabels.map(({ col, label }, i) => (
-            <span key={i} className={`col-start-${col}`}>
+            <span key={i} style={{ gridColumnStart: col }}>
               {label}
             </span>
           ))}
@@ -124,7 +144,12 @@ export function Activity({ timestamps }: { timestamps: number[] }) {
         </div>
         <div className="grid grid-flow-col grid-rows-[repeat(7,var(--cell-size))] gap-0">
           {activityCells.map((cell) => (
-            <ActivityDot key={cell.id} seed={cell.seed} level={cell.level} />
+            <ActivityDot
+              key={cell.id}
+              seed={cell.seed}
+              level={cell.level}
+              dateStr={formatDate(cell.date)}
+            />
           ))}
         </div>
       </div>

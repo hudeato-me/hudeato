@@ -1,6 +1,7 @@
 interface ActivityDotProps {
   seed: number
   level: number
+  dateStr?: string
 }
 
 function seededRandom(seed: number) {
@@ -28,7 +29,7 @@ function createBrushBlobPath(seed: number, cx: number, cy: number, radius: numbe
   }, '') + ' Z'
 }
 
-export function ActivityDot({ seed, level }: ActivityDotProps) {
+export function ActivityDot({ seed, level, dateStr }: ActivityDotProps) {
   const opacityMap = [0.08, 0.22, 0.38, 0.55, 0.72]
   const normalizedLevel = Math.min(Math.max(level, 0), opacityMap.length - 1)
   const opacity = opacityMap[normalizedLevel]
@@ -56,18 +57,25 @@ export function ActivityDot({ seed, level }: ActivityDotProps) {
   const blurId = `brush-dot-blur-${seed}`
 
   return (
-    <svg viewBox="0 0 20 20" className="h-[var(--cell-size)] w-[var(--cell-size)] text-black">
-      <defs>
-        <filter id={blurId} x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="0.45" />
-        </filter>
-      </defs>
+    <div className="relative group flex items-center justify-center h-[var(--cell-size)] w-[var(--cell-size)]">
+      <svg viewBox="0 0 20 20" className="w-full h-full text-black">
+        <defs>
+          <filter id={blurId} x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="0.45" />
+          </filter>
+        </defs>
 
-      <g filter={`url(#${blurId})`}>
-        <path d={corePath} fill="currentColor" opacity={Math.max(opacity - 0.1, 0.08)} />
-        <path d={washPathA} fill="currentColor" opacity={Math.max(opacity - 0.16, 0.06)} />
-        <path d={washPathB} fill="currentColor" opacity={Math.max(opacity - 0.24, 0.05)} />
-      </g>
-    </svg>
+        <g filter={`url(#${blurId})`}>
+          <path d={corePath} fill="currentColor" opacity={Math.max(opacity - 0.1, 0.08)} />
+          <path d={washPathA} fill="currentColor" opacity={Math.max(opacity - 0.16, 0.06)} />
+          <path d={washPathB} fill="currentColor" opacity={Math.max(opacity - 0.24, 0.05)} />
+        </g>
+      </svg>
+      {dateStr && (
+        <div className="pointer-events-none absolute bottom-full mb-1 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-neutral-800 text-white text-[10px] px-2 py-1 rounded-md z-50 whitespace-nowrap shadow-md">
+          {dateStr}
+        </div>
+      )}
+    </div>
   )
 }

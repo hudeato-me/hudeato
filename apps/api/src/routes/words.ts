@@ -11,7 +11,7 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 	.get(
 		"/",
 		zValidator("param", z.object({ setId: z.string() }), handleZodError),
-		zValidator("query", z.object({ limit: z.coerce.number().optional().default(50), offset: z.coerce.number().optional().default(0) })),
+		zValidator("query", z.object({ limit: z.coerce.number().optional().default(50), offset: z.coerce.number().optional().default(0) }), handleZodError),
 		async (c) => {
 			const { setId } = c.req.valid("param");
 			const { limit, offset } = c.req.valid("query");

@@ -7,32 +7,15 @@ import { handleZodError } from "../utils/error-validator";
 
 const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 
-	// /api/words/のroute
-
-	// 全てのセットの単語を取得
+	// セット内の単語一覧を取得
 	.get(
 		"/",
+		zValidator("param", z.object({ setId: z.string() }), handleZodError),
 		zValidator("query", z.object({ limit: z.coerce.number().optional().default(50), offset: z.coerce.number().optional().default(0) })),
 		async (c) => {
+			const { setId } = c.req.valid("param");
 			const { limit, offset } = c.req.valid("query");
-			const result = await getWords(c.get("db"), c.get("userId"), { limit, offset });
-			return c.json(result);
-		}
-	)
-	// セット内の単語を取得
-	.get(
-		"/word-set/:word-set-id",
-		// パスパラメータの検証
-		zValidator("param", z.object({ "word-set-id": z.string() }), handleZodError),
-		zValidator("query", z.object({ limit: z.coerce.number().optional().default(50), offset: z.coerce.number().optional().default(0) })),
-		async (c) => {
-			const wordSetId = c.req.valid("param")["word-set-id"];
-			const { limit, offset } = c.req.valid("query");
-			const result = await getWords(
-				c.get("db"),
-				c.get("userId"),
-				{ wordSetId, limit, offset },
-			);
+			const result = await getWords(c.get("db"), c.get("userId"), { wordSetId: setId, limit, offset });
 			return c.json(result);
 		}
 	)
@@ -40,14 +23,10 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 	.get(
 		"/:wordId",
 		// パスパラメータの検証
-		zValidator("param", z.object({ wordId: z.string() }), handleZodError),
+		zValidator("param", z.object({ setId: z.string(), wordId: z.string() }), handleZodError),
 		async (c) => {
-			const { wordId } = c.req.valid("param");
-			const result = await getWordById(
-				c.get("db"),
-				c.get("userId"),
-				wordId,
-			);
+			const { setId, wordId } = c.req.valid("param");
+			const result = await getWordById(c.get("db"), c.get("userId"), setId, wordId);
 			if (!result) {
 				return c.json({ error: "Not Found", data: null } as const, 404);
 			}

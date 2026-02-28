@@ -32,9 +32,10 @@ export const getWords = async (
 export const getWordById = async (
 	db: Db,
 	userId: string,
+	wordSetId: string,
 	wordId: string,
 ) => {
-	const word = await findWordById(db, userId, wordId);
+	const word = await findWordById(db, userId, wordSetId, wordId);
 	if (!word) return null;
 
 	return word;

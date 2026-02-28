@@ -17,33 +17,14 @@ export const wordSetKeys = {
 };
 
 
-// 全単語の取得
-export const useWords = (enabled = true) =>
-	useQuery({
-		queryKey: wordKeys.all,
-		queryFn: async () => {
-
-			const res = await client.api.words.$get({
-				query: {},
-			});
-			if (!res.ok) {
-				const err = await res.json() as { error?: string };
-				throw new Error(err.error ?? `API Error: ${res.status}`);
-			}
-			return res.json();
-		},
-		enabled,
-		staleTime: CACHE_STALE_TIME,
-	});
-
-// セットごとに単語取得
-export const useWordsBySet = (wordSetId: string, enabled = true) =>
+// 単語セット内の全単語取得
+export const useWords = (wordSetId: string, enabled = true) =>
 	useQuery({
 		queryKey: wordKeys.bySet(wordSetId),
 		queryFn: async () => {
 
-			const res = await client.api.words["word-set"][":word-set-id"].$get({
-				param: { "word-set-id": wordSetId },
+			const res = await client.api.v1.sets[":setId"].words.$get({
+				param: { setId: wordSetId },
 				query: {}, // limit/offsetは省略可能だが型上オブジェクトは必要
 			});
 			if (!res.ok) {
@@ -52,20 +33,19 @@ export const useWordsBySet = (wordSetId: string, enabled = true) =>
 			}
 			return res.json();
 		},
-		// wordSetIdがundefinedのときはfetchしない
 		enabled: enabled && !!wordSetId,
 		staleTime: CACHE_STALE_TIME,
 	});
 
 // 単語詳細情報の取得
-export const useWord = (wordId: string, enabled = true) => {
+export const useWord = (wordSetId: string, wordId: string, enabled = true) => {
 	const queryClient = useQueryClient();
 	return useQuery({
 		queryKey: wordKeys.single(wordId),
 		queryFn: async () => {
 
-			const res = await client.api.words[":wordId"].$get({
-				param: { wordId },
+			const res = await client.api.v1.sets[":setId"].words[":wordId"].$get({
+				param: { setId: wordSetId, wordId },
 			});
 			if (!res.ok) {
 				const err = await res.json() as { error?: string };
@@ -73,13 +53,12 @@ export const useWord = (wordId: string, enabled = true) => {
 			}
 			return res.json();
 		},
-		// wordIdがundefinedのときはfetchしない
-		enabled: enabled && !!wordId,
+		enabled: enabled && !!wordId && !!wordSetId,
 		staleTime: CACHE_STALE_TIME,
 		// placeholderDataで表示は即座に行ないつつ、バックグラウンドでfetchして、fetch後画面を更新する
 		placeholderData: () => {
-			// 全件リストから探す
-			const allWords = queryClient.getQueryData<Word[]>(wordKeys.all);
+			// wordSetIdの全件リストから探す
+			const allWords = queryClient.getQueryData<Word[]>(wordKeys.bySet(wordSetId));
 			const foundInAll = allWords?.find((w) => w.id === wordId);
 			if (foundInAll) return { error: null, data: foundInAll } as any;
 
@@ -160,7 +139,7 @@ export const useWordSets = (enabled = true) =>
 		queryKey: wordSetKeys.all,
 		queryFn: async () => {
 
-			const res = await client.api["word-sets"].$get();
+			const res = await client.api.v1.sets.$get();
 			if (!res.ok) {
 				const err = await res.json() as { error?: string };
 				throw new Error(err.error ?? `API Error: ${res.status}`);

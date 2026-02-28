@@ -80,9 +80,9 @@ export const countData = async (db: Db, userId: string) => {
 };
 
 // 単語の取得（単語編集ページ用）
-export const findWordById = async (db: Db, userId: string, wordId: string) => {
+export const findWordById = async (db: Db, userId: string, wordSetId: string, wordId: string) => {
 	return db.query.word.findFirst({
-		where: and(eq(word.userId, userId), eq(word.id, wordId)),
+		where: and(eq(word.userId, userId), eq(word.wordSetId, wordSetId), eq(word.id, wordId)),
 		columns: {
 			id: true,
 			wordSetId: true,

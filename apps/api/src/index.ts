@@ -72,8 +72,8 @@ app.post("/api/webhooks/polar", handlePolarWebhook);
 const api = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 	.use("*", protectedMiddleware)
 	.use("*", rateLimiter)
-	.route("/words", words)
-	.route("/word-sets", wordSets)
+	.route("/v1/sets", wordSets)
+	.route("/v1/sets/:setId/words", words)
 	.route("/dashboard", dashboard);
 
 // .route() の戻り値をチェーンして型を伝搬させる（Hono RPC に必要）

@@ -2,7 +2,7 @@ import { createDb } from "../../db";
 import {
 	countData,
 	findWordById,
-	findWords,
+	findWordSets,
 	findWordsBySet,
 	getActivityTimestamps,
 } from "./repository";
@@ -15,17 +15,10 @@ import { Db } from "../../types/words-route-type";
 export const getWords = async (
 	db: Db,
 	userId: string,
-	options?: { wordSetId?: string; limit?: number; offset?: number },
+	options: { wordSetId: string; limit?: number; offset?: number },
 ) => {
-	const wordSetId = options?.wordSetId;
-
-	if (wordSetId) {
-		const words = await findWordsBySet(db, userId, wordSetId, options);
-		return words;
-	} else {
-		const words = await findWords(db, userId, options);
-		return words;
-	}
+	const words = await findWordsBySet(db, userId, options.wordSetId, options);
+	return words;
 };
 
 // 単語詳細情報を取得
@@ -67,4 +60,13 @@ export const getDashboard = async (
 		})),
 	};
 	return summary;
+};
+
+// ユーザーのwordSet一覧を取得
+export const getWordSets = async (
+	db: Db,
+	userId: string,
+) => {
+	const wordSets = await findWordSets(db, userId);
+	return wordSets;
 };

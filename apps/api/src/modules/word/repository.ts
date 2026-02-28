@@ -1,36 +1,10 @@
 import { and, asc, count, desc, eq, sql } from "drizzle-orm";
-import { createDb, wordMeaning } from "../../db";
+import { createDb, wordMeaning, wordSet } from "../../db";
 import { word } from "../../db";
 
 import { Db } from "../../types/words-route-type";
 
 // SQLクエリの関数を定義
-
-// 全てのセットから単語を取得（いつ使うか分からないけど）
-// 単語・意味・createdAt・updatedAtを返す
-// limitとoffsetでページネーション追加
-export const findWords = async (db: Db, userId: string, options?: { limit?: number; offset?: number }) => {
-	return db.query.word.findMany({
-		where: eq(word.userId, userId),
-		orderBy: [desc(word.createdAt)],
-		...(options?.limit ? { limit: options.limit } : {}),
-		...(options?.offset ? { offset: options.offset } : {}),
-		columns: {
-			id: true,
-			text: true,
-			createdAt: true,
-			updatedAt: true,
-		},
-		with: {
-			meanings: {
-				orderBy: [asc(wordMeaning.slot)],
-				columns: {
-					meaning: true,
-				},
-			},
-		},
-	});
-};
 
 // セット内の単語を取得（Recent Wordsと一覧リスト用・ページネーション未実装）
 export const findWordsBySet = async (
@@ -128,4 +102,18 @@ export const getActivityTimestamps = async (db: Db, userId: string) => {
 		},
 	});
 	return result.map((r) => r.createdAt?.getTime() ?? 0);
+};
+
+// ユーザーのwordSet一覧を取得
+export const findWordSets = async (db: Db, userId: string) => {
+	return db.query.wordSet.findMany({
+		where: eq(wordSet.userId, userId),
+		orderBy: [desc(wordSet.createdAt)],
+		columns: {
+			id: true,
+			name: true,
+			createdAt: true,
+			updatedAt: true,
+		},
+	});
 };

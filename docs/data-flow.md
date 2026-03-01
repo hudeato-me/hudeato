@@ -1,8 +1,6 @@
 
 ### 単語の取得
 
-キャッシュをredis保存にしているがデータベースにした方がよい。
-
 ```mermaid
 sequenceDiagram
     autonumber
@@ -30,6 +28,8 @@ sequenceDiagram
 ```
 
 ### 単語の追加
+
+キャッシュをredis保存にしているがデータベースにした方がよい。
 
 ```mermaid
 sequenceDiagram

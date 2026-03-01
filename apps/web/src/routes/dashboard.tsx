@@ -130,7 +130,7 @@ function DashboardPage() {
         onSelect={setSelectedIdState}
       />
 
-      <Footer />
+      <Footer wordSetId={selectedWordSetId ?? undefined} />
     </div>
   )
 }

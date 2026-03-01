@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
+import { useSearchWords } from '~/hooks/use-words'
 
 function SearchIcon() {
   return (
@@ -59,18 +60,34 @@ function ArrowRightIcon() {
   )
 }
 
-export function Footer() {
-    interface SuggestionItem {
-      word: string
-      meaning: string
-      partOfSpeech?: string
-      mastered?: boolean
-    }
+export function Footer({ wordSetId }: { wordSetId?: string }) {
+  interface SuggestionItem {
+    word: string
+    meaning: string
+    partOfSpeech?: string
+    mastered?: boolean
+  }
 
   const [searchMode, setSearchMode] = useState(false)
   const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const scrollYRef = useRef(0)
+
+  // クエリのデバウンス処理（短くしてレスポンスを早くする）
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query)
+    }, 150) // 300ms -> 150ms に短縮
+    return () => clearTimeout(timer)
+  }, [query])
+
+  // リアルタイム検索フックの呼び出し
+  const { data: searchResults } = useSearchWords(
+    wordSetId ?? '',
+    debouncedQuery,
+    !!wordSetId && debouncedQuery.trim().length > 0
+  )
 
   useEffect(() => {
     if (!searchMode) {
@@ -111,27 +128,19 @@ export function Footer() {
     setQuery('')
   }
 
-  const quickSuggestions: SuggestionItem[] = [
-    { word: 'ephemeral', meaning: '一時的な、はかない', partOfSpeech: '形容詞', mastered: true },
-    { word: 'paradigm', meaning: '典型、模範、パラダイム', partOfSpeech: '名詞' },
-    { word: 'ameliorate', meaning: '改善する、良くする', partOfSpeech: '動詞', mastered: true },
-    { word: 'lucid', meaning: '明快な、分かりやすい', partOfSpeech: '形容詞' },
-  ]
-
-  const filteredSuggestions = query.trim()
-    ? quickSuggestions.filter(
-        (item) =>
-          item.word.toLowerCase().includes(query.toLowerCase()) ||
-          item.meaning.includes(query),
-      )
-    : []
+  // 検索結果をUI用のSuggestionItem形式にマッピング
+  const filteredSuggestions: SuggestionItem[] = (searchResults ?? []).map((item: any) => ({
+    word: item.text,
+    meaning: item.meanings?.[0]?.meaning ?? '意味未登録',
+    partOfSpeech: item.meanings?.[0]?.partOfSpeech ?? undefined,
+    mastered: item.isMastered,
+  }))
 
   return (
     <>
       <div
-        className={`fixed inset-0 z-[60] transition-opacity duration-200 ${
-          searchMode ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`}
+        className={`fixed inset-0 z-[60] transition-opacity duration-200 ${searchMode ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+          }`}
         aria-hidden={!searchMode}
       >
         <button
@@ -204,9 +213,8 @@ export function Footer() {
       </div>
 
       <div
-        className={`fixed left-1/2 -translate-x-1/2 bottom-4 w-[430px] max-w-[calc(100vw-16px)] px-3 z-[70] transition-all duration-200 ${
-          searchMode ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-5 pointer-events-none'
-        }`}
+        className={`fixed left-1/2 -translate-x-1/2 bottom-4 w-[430px] max-w-[calc(100vw-16px)] px-3 z-[70] transition-all duration-200 ${searchMode ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-5 pointer-events-none'
+          }`}
         aria-hidden={!searchMode}
       >
         <div className="flex items-center gap-2">
@@ -232,9 +240,8 @@ export function Footer() {
       </div>
 
       <footer
-        className={`fixed left-1/2 -translate-x-1/2 bottom-4 w-[430px] max-w-[calc(100vw-16px)] px-3 z-50 transition-all duration-200 ${
-          searchMode ? 'opacity-0 translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0 pointer-events-auto'
-        }`}
+        className={`fixed left-1/2 -translate-x-1/2 bottom-4 w-[430px] max-w-[calc(100vw-16px)] px-3 z-50 transition-all duration-200 ${searchMode ? 'opacity-0 translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0 pointer-events-auto'
+          }`}
       >
         <div className="flex items-center justify-center gap-2">
           <button

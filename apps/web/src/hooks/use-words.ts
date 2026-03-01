@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { client } from "~/lib/api-client";
 const CACHE_STALE_TIME = 5 * 60 * 1000;
 import { Word } from "~/types";
@@ -168,5 +168,6 @@ export const useSearchWords = (wordSetId: string, q: string, enabled = true) =>
 		},
 		enabled: enabled && !!wordSetId && !!q.trim(),
 		staleTime: CACHE_STALE_TIME,
+		placeholderData: keepPreviousData,
 	});
 

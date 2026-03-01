@@ -154,3 +154,128 @@ export const searchWords = async (
 		},
 	});
 };
+
+// WordSetの作成
+export const insertWordSet = async (db: Db, userId: string, id: string, name: string) => {
+	await db.insert(wordSet).values({
+		id,
+		userId,
+		name,
+	});
+};
+
+// WordSetの名前更新
+export const updateWordSetName = async (db: Db, userId: string, wordSetId: string, name: string) => {
+	await db
+		.update(wordSet)
+		.set({ name })
+		.where(and(eq(wordSet.id, wordSetId), eq(wordSet.userId, userId)));
+};
+
+// WordSetの削除
+export const deleteWordSetById = async (db: Db, userId: string, wordSetId: string) => {
+	await db
+		.delete(wordSet)
+		.where(and(eq(wordSet.id, wordSetId), eq(wordSet.userId, userId)));
+};
+
+// 単語の作成 (意味も同時)
+export const insertWord = async (
+	db: Db,
+	userId: string,
+	wordSetId: string,
+	wordId: string,
+	data: {
+		text: string;
+		locationLabel?: string | null;
+		imageKey?: string | null;
+	},
+	meanings: Array<{
+		id: string;
+		meaning: string;
+		partOfSpeech?: string | null;
+		phonetic?: string | null;
+		example?: string | null;
+		collocation?: string | null;
+		synonym?: string | null;
+		etymology?: string | null;
+		source?: string | null;
+		slot: number;
+	}>
+) => {
+	await db.transaction(async (tx) => {
+		await tx.insert(word).values({
+			id: wordId,
+			userId,
+			wordSetId,
+			text: data.text,
+			locationLabel: data.locationLabel,
+			imageKey: data.imageKey,
+		});
+
+		if (meanings.length > 0) {
+			const meaningsWithWordId = meanings.map((m) => ({
+				...m,
+				wordId,
+			}));
+			await tx.insert(wordMeaning).values(meaningsWithWordId);
+		}
+	});
+};
+
+// 単語の更新 (意味の洗い替え)
+export const updateWordData = async (
+	db: Db,
+	userId: string,
+	wordSetId: string,
+	wordId: string,
+	data: {
+		text: string;
+		locationLabel?: string | null;
+		imageKey?: string | null;
+	},
+	meanings: Array<{
+		id: string;
+		meaning: string;
+		partOfSpeech?: string | null;
+		phonetic?: string | null;
+		example?: string | null;
+		collocation?: string | null;
+		synonym?: string | null;
+		etymology?: string | null;
+		source?: string | null;
+		slot: number;
+	}>
+) => {
+	await db.transaction(async (tx) => {
+		// まずWordデータ更新
+		await tx
+			.update(word)
+			.set({
+				text: data.text,
+				locationLabel: data.locationLabel ?? null,
+				imageKey: data.imageKey ?? null,
+			})
+			.where(and(eq(word.id, wordId), eq(word.userId, userId), eq(word.wordSetId, wordSetId)));
+
+		// 既存の意味を削除して洗い替え
+		await tx
+			.delete(wordMeaning)
+			.where(eq(wordMeaning.wordId, wordId));
+
+		if (meanings.length > 0) {
+			const meaningsWithWordId = meanings.map((m) => ({
+				...m,
+				wordId,
+			}));
+			await tx.insert(wordMeaning).values(meaningsWithWordId);
+		}
+	});
+};
+
+// 単語の削除
+export const deleteWordById = async (db: Db, userId: string, wordSetId: string, wordId: string) => {
+	await db
+		.delete(word)
+		.where(and(eq(word.id, wordId), eq(word.userId, userId), eq(word.wordSetId, wordSetId)));
+};

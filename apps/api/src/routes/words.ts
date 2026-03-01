@@ -2,8 +2,29 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { Bindings, WordsRouteVariables } from "../types";
-import { getWordById, getWords, searchWordList } from "../modules/word/service";
+import { getWordById, getWords, searchWordList, createWord, updateWord, removeWord } from "../modules/word/service";
 import { handleZodError } from "../utils/error-validator";
+
+// 単語の意味 (WordMeaning) スキーマ
+const wordMeaningSchema = z.object({
+	meaning: z.string().min(1),
+	partOfSpeech: z.string().nullable().optional(),
+	phonetic: z.string().nullable().optional(),
+	example: z.string().nullable().optional(),
+	collocation: z.string().nullable().optional(),
+	synonym: z.string().nullable().optional(),
+	etymology: z.string().nullable().optional(),
+	source: z.string().nullable().optional(),
+	slot: z.number().int().min(1).max(5),
+});
+
+// 単語の作成/更新用スキーマ
+const wordMutationSchema = z.object({
+	text: z.string().min(1),
+	locationLabel: z.string().nullable().optional(),
+	imageKey: z.string().nullable().optional(),
+	meanings: z.array(wordMeaningSchema).min(1),
+});
 
 const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 
@@ -47,6 +68,40 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 				return c.json({ error: "Not Found", data: null } as const, 404);
 			}
 			return c.json({ error: null, data: result } as const);
+		}
+	)
+	// 単語作成
+	.post(
+		"/",
+		zValidator("param", z.object({ setId: z.string() }), handleZodError),
+		zValidator("json", wordMutationSchema, handleZodError),
+		async (c) => {
+			const { setId } = c.req.valid("param");
+			const { text, locationLabel, imageKey, meanings } = c.req.valid("json");
+			const result = await createWord(c.get("db"), c.get("userId"), setId, { text, locationLabel, imageKey }, meanings);
+			return c.json({ error: null, data: result } as const, 201);
+		}
+	)
+	// 単語更新
+	.put(
+		"/:wordId",
+		zValidator("param", z.object({ setId: z.string(), wordId: z.string() }), handleZodError),
+		zValidator("json", wordMutationSchema, handleZodError),
+		async (c) => {
+			const { setId, wordId } = c.req.valid("param");
+			const { text, locationLabel, imageKey, meanings } = c.req.valid("json");
+			await updateWord(c.get("db"), c.get("userId"), setId, wordId, { text, locationLabel, imageKey }, meanings);
+			return c.json({ error: null, data: { success: true } } as const);
+		}
+	)
+	// 単語削除
+	.delete(
+		"/:wordId",
+		zValidator("param", z.object({ setId: z.string(), wordId: z.string() }), handleZodError),
+		async (c) => {
+			const { setId, wordId } = c.req.valid("param");
+			await removeWord(c.get("db"), c.get("userId"), setId, wordId);
+			return c.json({ error: null, data: { success: true } } as const);
 		}
 	);
 

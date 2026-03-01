@@ -10,6 +10,7 @@ export const wordKeys = {
 	bySet: (wordSetId: string) => ["words", "set", wordSetId] as const,
 	single: (wordId: string) => ["words", wordId] as const,
 	dashboard: (wordSetId: string) => ["dashboard", wordSetId] as const,
+	search: (wordSetId: string, q: string) => ["words", "search", wordSetId, q] as const,
 };
 // 単語セットのクエリキー
 export const wordSetKeys = {
@@ -149,3 +150,23 @@ export const useWordSets = (enabled = true) =>
 		staleTime: 1000 * 60 * 60, // 1時間キャッシュ (永続化環境で一生更新されないのを防ぐ)
 		enabled,
 	});
+
+// 単語の検索
+export const useSearchWords = (wordSetId: string, q: string, enabled = true) =>
+	useQuery({
+		queryKey: wordKeys.search(wordSetId, q),
+		queryFn: async () => {
+			const res = await client.api.v1.sets[":setId"].words.search.$get({
+				param: { setId: wordSetId },
+				query: { q },
+			});
+			if (!res.ok) {
+				const err = await res.json() as { error?: string };
+				throw new Error(err.error ?? `API Error: ${res.status}`);
+			}
+			return res.json();
+		},
+		enabled: enabled && !!wordSetId && !!q.trim(),
+		staleTime: CACHE_STALE_TIME,
+	});
+

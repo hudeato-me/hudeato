@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, like, sql } from "drizzle-orm";
 import { createDb, wordMeaning, wordSet } from "../../db";
 import { word } from "../../db";
 
@@ -114,6 +114,43 @@ export const findWordSets = async (db: Db, userId: string) => {
 			name: true,
 			createdAt: true,
 			updatedAt: true,
+		},
+	});
+};
+
+// 単語の検索（リアルタイム検索用）
+export const searchWords = async (
+	db: Db,
+	userId: string,
+	wordSetId: string,
+	query: string,
+	limit: number = 10,
+) => {
+	const searchQuery = `%${query}%`;
+
+	return db.query.word.findMany({
+		where: and(
+			eq(word.userId, userId),
+			eq(word.wordSetId, wordSetId),
+			like(word.text, searchQuery),
+		),
+		orderBy: [desc(word.createdAt)],
+		limit: limit,
+		columns: {
+			id: true,
+			text: true,
+			isMastered: true,
+			createdAt: true,
+			updatedAt: true,
+		},
+		with: {
+			meanings: {
+				orderBy: [asc(wordMeaning.slot)],
+				columns: {
+					meaning: true,
+					partOfSpeech: true,
+				},
+			},
 		},
 	});
 };

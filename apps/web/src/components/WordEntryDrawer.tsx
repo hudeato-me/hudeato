@@ -29,6 +29,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
             collocation: '',
             synonym: '',
             etymology: '',
+            source: '',
         },
     ]);
     const [activeTab, setActiveTab] = useState(0);

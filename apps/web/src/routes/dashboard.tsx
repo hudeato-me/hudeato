@@ -7,6 +7,7 @@ import { Header } from '~/components/Header'
 import { RecentWordItem } from '~/components/dashboard/RecentWordItem'
 import { StatCard } from '~/components/dashboard/StatCard'
 import { WordSetDrawer } from '~/components/wordset/WordSetDrawer'
+import { WordEntryDrawer } from '~/components/WordEntryDrawer'
 // authentication client
 import { authClient } from '~/lib/auth-client'
 // query client
@@ -48,6 +49,7 @@ function DashboardPage() {
   const { session } = Route.useRouteContext()
   // ドロワーの開閉状態
   const [isWordSetDrawerOpen, setIsWordSetDrawerOpen] = useState(false)
+  const [editingWordId, setEditingWordId] = useState<string | null>(null)
 
   // wordSet一覧の取得（beforeLoadを通っている時点でsessionは確実にあるため true固定）
   const { data: wordSets = [] } = useWordSets(true)
@@ -116,6 +118,7 @@ function DashboardPage() {
                 key={item.id}
                 word={item.text}
                 meaning={item.meaning ?? '意味未登録'}
+                onClick={() => setEditingWordId(item.id)}
               />
             ))
           )}
@@ -128,6 +131,12 @@ function DashboardPage() {
         sets={wordSets}
         onClose={() => setIsWordSetDrawerOpen(false)}
         onSelect={setSelectedIdState}
+      />
+      <WordEntryDrawer
+        isOpen={editingWordId !== null}
+        onClose={() => setEditingWordId(null)}
+        wordSetId={selectedWordSetId ?? undefined}
+        existingWordId={editingWordId}
       />
       {/* wordSetが選択されている時だけFooterを表示 */}
       {selectedWordSetId && <Footer wordSetId={selectedWordSetId} />}

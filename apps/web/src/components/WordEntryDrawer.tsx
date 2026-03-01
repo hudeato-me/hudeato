@@ -217,6 +217,47 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         }
     };
 
+    // ==== ドラッグ（スワイプ）で閉じる機構 (Pointer Events) ====
+    const [dragY, setDragY] = useState(0);
+    const startY = useRef<number | null>(null);
+
+    const handlePointerDown = (e: React.PointerEvent) => {
+        // キャプチャすることで、ドラッグ中にマウスや指が要素外に出てもイベントを追跡できる
+        e.currentTarget.setPointerCapture(e.pointerId);
+        startY.current = e.clientY;
+    };
+
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (startY.current === null) return;
+
+        const diff = e.clientY - startY.current;
+
+        // 下方向のドラッグのみ許可
+        if (diff > 0) {
+            setDragY(diff);
+        }
+    };
+
+    const handlePointerUp = (e: React.PointerEvent) => {
+        if (startY.current === null) return;
+
+        e.currentTarget.releasePointerCapture(e.pointerId);
+
+        if (dragY > 150) {
+            // 閾値を超えたら閉じる
+            handleClose();
+        }
+
+        // 状態リセット
+        startY.current = null;
+        setDragY(0);
+    };
+
+    // ドラッグ中のスタイル
+    const drawerStyle = isOpen
+        ? { transform: `translateY(${dragY}px)`, transition: dragY > 0 ? 'none' : 'transform 0.3s ease-out', height: '95vh' }
+        : { transform: 'translateY(100%)', height: '95vh' };
+
     return (
         <div
             className={`fixed inset-0 z-[100] transition-opacity duration-300 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
@@ -232,29 +273,37 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
 
             {/* ドロワー本体 */}
             <div
-                className={`absolute bottom-0 w-full bg-white rounded-t-3xl shadow-xl transition-transform duration-300 ease-out flex flex-col ${isOpen ? 'translate-y-0' : 'translate-y-full'
-                    }`}
-                style={{ height: '95vh' }}
+                className="absolute bottom-0 w-full bg-white rounded-t-3xl shadow-xl flex flex-col transition-transform"
+                style={drawerStyle}
                 onClick={(e) => e.stopPropagation()}
             >
-                {/* ドラッグハンドル */}
-                <div className="w-full flex justify-center pt-3 pb-2 shrink-0">
-                    <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
-                </div>
-
-                {/* ヘッダー */}
-                <div className="flex items-center justify-between px-5 pb-4 shrink-0 border-b border-gray-100">
-                    <button onClick={handleClose} className="p-2 -ml-2 text-gray-800" aria-label="戻る">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                        </svg>
-                    </button>
-                    <div className="flex items-center gap-2">
-                        <div className="font-semibold text-gray-800">{existingWordId ? 'Edit Word' : 'New Word'}</div>
-                        {isSaving && <span className="text-xs text-gray-400">Saving...</span>}
+                {/* ドラッグ可能なヘッダーエリア */}
+                <div
+                    className="w-full shrink-0 cursor-grab active:cursor-grabbing touch-none"
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerCancel={handlePointerUp}
+                >
+                    {/* ドラッグハンドル */}
+                    <div className="w-full flex justify-center pt-3 pb-2">
+                        <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
                     </div>
-                    {/* Saveボタンは不要になったため削除し、レイアウト調整用の空要素に変更 */}
-                    <div className="w-10"></div>
+
+                    {/* ヘッダー */}
+                    <div className="flex items-center justify-between px-5 pb-4 border-b border-gray-100">
+                        <button onClick={handleClose} className="p-2 -ml-2 text-gray-800 hover:bg-gray-100 rounded-full transition-colors cursor-pointer" aria-label="戻る">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                        </button>
+                        <div className="flex items-center gap-2">
+                            <div className="font-semibold text-gray-800 select-none">{existingWordId ? 'Edit Word' : 'New Word'}</div>
+                            {isSaving && <span className="text-xs text-gray-400 select-none">Saving...</span>}
+                        </div>
+                        {/* Saveボタン用の空要素 */}
+                        <div className="w-10"></div>
+                    </div>
                 </div>
 
                 {/* スクロールコンテンツ */}

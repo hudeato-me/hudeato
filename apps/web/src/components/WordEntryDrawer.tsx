@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useCreateWord, useUpdateWord, useWord } from '~/hooks/use-words';
+import { useCreateWord, useUpdateWord, useWord, useDeleteWord } from '~/hooks/use-words';
 
 interface WordEntryDrawerProps {
     isOpen: boolean;
@@ -9,11 +9,17 @@ interface WordEntryDrawerProps {
 }
 
 export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: WordEntryDrawerProps) {
+    // 新規作成時に発行されたIDを内部で保持する
+    const [createdWordId, setCreatedWordId] = useState<string | null>(null);
+
+    // 実際に使用するWordId（既存のものか、今さっき作ったものか）
+    const effectiveWordId = existingWordId || createdWordId;
+
     // 既存単語の取得
     const { data: existingData, isSuccess: isExistingDataReady } = useWord(
         wordSetId ?? '',
-        existingWordId ?? '',
-        isOpen && !!wordSetId && !!existingWordId
+        effectiveWordId ?? '',
+        isOpen && !!wordSetId && !!effectiveWordId
     );
 
     const [word, setWord] = useState('');
@@ -35,8 +41,9 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
     const [activeTab, setActiveTab] = useState(0);
 
     // カスタムフック
-    const { mutate: createWord } = useCreateWord(wordSetId ?? '');
-    const { mutate: updateWord } = useUpdateWord(wordSetId ?? '');
+    const { mutate: createWord, mutateAsync: createWordAsync } = useCreateWord(wordSetId ?? '');
+    const { mutate: updateWord, mutateAsync: updateWordAsync } = useUpdateWord(wordSetId ?? '');
+    const { mutateAsync: deleteWordAsync } = useDeleteWord(wordSetId ?? '');
 
     // データ初期化（既存データがある場合）
     useEffect(() => {
@@ -60,8 +67,30 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
                     }))
                 );
             }
-        } else if (!existingWordId && isOpen) {
-            // 新規作成用にリセット
+            // データセット後に、初期状態としてlastSavedDataを更新（不要な保存を防ぐため）
+            // stateへのセットが非同期のため、ここではdataから直接payload相当の文字列を作るのが確実です
+            const initPayload = {
+                text: data.text,
+                locationLabel: data.locationLabel ?? null,
+                imageKey: null,
+                meanings: data.meanings && data.meanings.length > 0
+                    ? data.meanings.map((m: any, idx: number) => ({
+                        meaning: m.meaning || '意味なし',
+                        partOfSpeech: m.partOfSpeech || null,
+                        phonetic: m.phonetic || null,
+                        example: m.example || null,
+                        collocation: m.collocation || null,
+                        synonym: m.synonym || null,
+                        etymology: m.etymology || null,
+                        source: m.source || null,
+                        slot: idx + 1,
+                    }))
+                    : [{ meaning: '意味なし', partOfSpeech: null, phonetic: null, example: null, collocation: null, synonym: null, etymology: null, source: null, slot: 1 }]
+            };
+            // 既存データの初期文字列としてRefに保持
+            lastSavedData.current = JSON.stringify(initPayload);
+        } else if (!effectiveWordId && isOpen && !createdWordId) {
+            // 新規作成用にリセット（かつ、内部で作成された直後でない場合）
             let initialMeaning = {
                 id: Date.now(),
                 meaning: '',
@@ -78,7 +107,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
             setMeanings([initialMeaning]);
             setActiveTab(0);
         }
-    }, [existingWordId, existingData, isOpen]);
+    }, [effectiveWordId, existingData, isOpen, createdWordId]);
 
     // ==== リアルタイム保存 (Auto Save) 機構 ====
     const [isSaving, setIsSaving] = useState(false);
@@ -115,34 +144,57 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         // 初回ロード直後など、変更がない場合はスキップ
         if (currentData === lastSavedData.current) return;
 
+        console.log('[DEBUG] Auto-save triggered. Difference detected.');
+        console.log(' - lastSavedData:', lastSavedData.current);
+        console.log(' - currentData:', currentData);
+
         setIsSaving(true);
 
-        const debouncedSave = setTimeout(() => {
+        const debouncedSave = setTimeout(async () => {
+            console.log('[DEBUG] Executing debounced save for effectiveWordId:', effectiveWordId);
             const payload = buildPayload();
 
-            if (existingWordId) {
-                // Update
-                updateWord(
-                    { wordId: existingWordId, data: payload },
-                    {
-                        onSettled: () => setIsSaving(false),
+            try {
+                if (effectiveWordId) {
+                    // Update
+                    console.log('[DEBUG] Calling updateWord API now');
+                    await updateWordAsync({ wordId: effectiveWordId, data: payload });
+                    console.log('[DEBUG] Auto-save (updateWord) SUCCESS');
+                } else {
+                    // Create
+                    console.log('[DEBUG] Calling createWord API now for auto-save');
+                    const response = await createWordAsync(payload);
+                    console.log('[DEBUG] Auto-save (createWord) SUCCESS. New ID:', response.data?.id);
+                    if (response.data && response.data.id) {
+                        setCreatedWordId(response.data.id);
                     }
-                );
-            } else {
-                // Create（仕様上、新規作成画面で文字を打ち始めたら枠ができて、以降はUUIDを持つが、
-                // モップアップ用として簡易的に都度POSTしない工夫が必要。
-                // ここではいったんPOSTし、IDを受け取って以降はUPDATEにするなどの方針が必要ですが、
-                // 取り急ぎ Notionライクに「入力完了時に作成/更新」とするか、
-                // debounceで保存します（簡易実装））
-
-                // Note: 本当は新規作成時にIDを発行し、以降はPUTにするロジックが良い
+                }
+            } catch (error) {
+                console.error('[DEBUG] Auto-save ERROR:', error);
+            } finally {
+                setIsSaving(false);
             }
 
             lastSavedData.current = currentData;
         }, 800);
 
-        return () => clearTimeout(debouncedSave);
-    }, [word, meanings, locationLabel, isOpen, buildPayload, existingWordId, wordSetId, updateWord]);
+        return () => {
+            clearTimeout(debouncedSave);
+            // タイマーがキャンセルされた場合は、保存が実行されなかったことを意味するのでisSavingをfalseに戻す
+            setIsSaving(false);
+        };
+    }, [word, meanings, locationLabel, isOpen, buildPayload, effectiveWordId, wordSetId, updateWordAsync, createWordAsync]);
+
+    // ドロワーが閉じたときのリセット処理
+    useEffect(() => {
+        if (!isOpen) {
+            lastSavedData.current = '';
+            setIsSaving(false);
+            setOverScroll(0);
+            setIsDeletingAnim(false);
+            setCreatedWordId(null);
+        }
+    }, [isOpen]);
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -207,14 +259,169 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
     }, [isOpen]);
 
     // 閉じる際の保存（最終バックアップ）
-    const handleClose = () => {
-        if (wordSetId && word.trim() && !existingWordId) {
-            const payload = buildPayload();
-            createWord(payload, {
-                onSettled: () => onClose()
-            });
+    const handleClose = async () => {
+        if (!wordSetId || !word.trim()) {
+            onClose();
+            return;
+        }
+
+        const currentData = JSON.stringify(buildPayload());
+        const hasUnsavedChanges = currentData !== lastSavedData.current;
+
+        if (hasUnsavedChanges) {
+            lastSavedData.current = currentData;
+            setIsSaving(true);
+            try {
+                if (existingWordId) {
+                    await updateWordAsync({ wordId: existingWordId, data: buildPayload() });
+                } else {
+                    await createWordAsync(buildPayload());
+                }
+            } finally {
+                setIsSaving(false);
+                onClose();
+            }
         } else {
             onClose();
+        }
+    };
+
+    // 削除処理（ゴミ箱ボタンから呼ばれるレガシー）
+    const handleDelete = async () => {
+        if (!existingWordId || !wordSetId) return;
+
+        const confirmDelete = window.confirm('Are you sure you want to delete this word?');
+        if (!confirmDelete) return;
+
+        executeDelete();
+    };
+
+    const executeDelete = async () => {
+        if (!effectiveWordId || !wordSetId) return;
+
+        // Vibrate for feedback if available
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate(50);
+        }
+
+        setIsDeletingAnim(true);
+        setIsSaving(true);
+
+        // 即座に保存フラグを折り、非同期で削除を実行（UIブロックしない）
+        lastSavedData.current = '';
+        setWord('');
+
+        deleteWordAsync(effectiveWordId).catch(error => {
+            console.error('Failed to delete word:', error);
+            setIsSaving(false);
+            setIsDeletingAnim(false);
+            setOverScroll(0);
+        });
+
+        // 上に飛んで消えるアニメーションを一瞬見せてから即座にドロワーを閉じる
+        setTimeout(() => {
+            setIsSaving(false);
+            onClose();
+        }, 200);
+    };
+
+    // ==== 引き上げて削除 (Overscroll / Pull up to Delete) ====
+    const [overScroll, setOverScroll] = useState(0);
+    const [isDeletingAnim, setIsDeletingAnim] = useState(false);
+    const [isPulling, setIsPulling] = useState(false);
+
+    const contentTouchStartY = useRef<number | null>(null);
+    const initialOverScroll = useRef<number>(0);
+    const wheelTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    const handleContentTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+        if (!effectiveWordId) return;
+        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+        if (Math.ceil(scrollTop + clientHeight) >= scrollHeight - 5 || overScroll > 0) {
+            contentTouchStartY.current = e.touches[0].clientY;
+            initialOverScroll.current = overScroll;
+            setIsPulling(true);
+        }
+    };
+
+    const handleContentTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+        if (!effectiveWordId || contentTouchStartY.current === null) return;
+        const currentY = e.touches[0].clientY;
+        const diff = contentTouchStartY.current - currentY; // positive = pulling up
+
+        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+        if (Math.ceil(scrollTop + clientHeight) >= scrollHeight - 5 || overScroll > 0) {
+            let newOverScroll = initialOverScroll.current + diff * 0.5; // Resistance
+            if (newOverScroll < 0) newOverScroll = 0;
+
+            setOverScroll(newOverScroll);
+
+            // 一定値以上スクロールされるとそのまま削除
+            if (newOverScroll > 350 && !isDeletingAnim) {
+                setIsPulling(false);
+                contentTouchStartY.current = null;
+                executeDelete();
+            }
+        }
+    };
+
+    const handleContentTouchEnd = () => {
+        if (!effectiveWordId || contentTouchStartY.current === null) return;
+        setIsPulling(false);
+        contentTouchStartY.current = null;
+
+        if (overScroll > 300) {
+            executeDelete();
+        } else if (overScroll > 50) {
+            // 準安定状態にスナップ
+            setOverScroll(150);
+        } else {
+            // 元に戻る
+            setOverScroll(0);
+        }
+    };
+
+    const handleContentWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+        if (!effectiveWordId) return;
+        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+        if (Math.ceil(scrollTop + clientHeight) >= scrollHeight - 5 || overScroll > 0) {
+            setIsPulling(true);
+
+            if (e.deltaY > 0) {
+                setOverScroll(prev => {
+                    const next = prev + e.deltaY * 0.3;
+                    if (next > 350 && !isDeletingAnim) {
+                        setTimeout(() => executeDelete(), 0);
+                    }
+                    return next;
+                });
+            } else if (e.deltaY < 0 && overScroll > 0) {
+                setOverScroll(prev => Math.max(0, prev + e.deltaY * 0.3));
+            }
+
+            if (wheelTimeoutRef.current) clearTimeout(wheelTimeoutRef.current);
+            wheelTimeoutRef.current = setTimeout(() => {
+                setIsPulling(false);
+                setOverScroll(prev => {
+                    if (prev > 300) {
+                        executeDelete();
+                        return prev;
+                    } else if (prev > 50) {
+                        return 150; // 準安定
+                    } else {
+                        return 0; // 戻る
+                    }
+                });
+            }, 150);
+        }
+    };
+
+    const handleMainContentScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        if (overScroll > 0) {
+            const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+            if (Math.ceil(scrollTop + clientHeight) < scrollHeight - 5) {
+                setOverScroll(0);
+            }
         }
     };
 
@@ -255,9 +462,16 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
     };
 
     // ドラッグ中のスタイル
-    const drawerStyle = isOpen
-        ? { transform: `translateY(${dragY}px)`, transition: dragY > 0 ? 'none' : 'transform 0.3s ease-out', height: '95vh' }
-        : { transform: 'translateY(100%)', height: '95vh' };
+    const currentTranslateY = isDeletingAnim ? '-100vh' : (dragY > 0 ? dragY : (overScroll > 0 ? -overScroll : 0));
+
+    // アニメーション設定 (引き上げ時やドラッグなどの「操作中」以外はアニメーションを有効にする)
+    const isAnimating = isDeletingAnim || (!isPulling && dragY === 0);
+    const transitionStyle = isAnimating ? 'transform 0.4s cubic-bezier(0.32, 0.72, 0, 1)' : 'none';
+
+    // 削除アニメーション中は、すでにisOpenがfalseになっても上空へ飛ぶスタイルを維持する
+    const drawerStyle = (isOpen || isDeletingAnim)
+        ? { transform: `translateY(${currentTranslateY}${typeof currentTranslateY === 'number' ? 'px' : ''})`, transition: transitionStyle, height: '95vh' }
+        : { transform: 'translateY(100%)', height: '95vh', transition: 'transform 0.3s ease-in-out' };
 
     return (
         <div
@@ -299,16 +513,56 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
                             </svg>
                         </button>
                         <div className="flex items-center gap-2">
-                            <div className="font-semibold text-gray-800 select-none">{existingWordId ? 'Edit Word' : 'New Word'}</div>
+                            <div className="font-semibold text-gray-800 select-none">{effectiveWordId ? 'Edit Word' : 'New Word'}</div>
                             {isSaving && <span className="text-xs text-gray-400 select-none">Saving...</span>}
                         </div>
-                        {/* Saveボタン用の空要素 */}
-                        <div className="w-10"></div>
+                        {/* スペース埋め */}
+                        <div className="w-10 flex justify-end"></div>
                     </div>
                 </div>
 
+                {/* 背景に表示されるDeleteエリア（ドロワー自体の下に無限に広がる赤い尻尾） */}
+                {effectiveWordId && (
+                    <div
+                        className="absolute left-0 w-full flex flex-col items-center overflow-hidden"
+                        style={{
+                            top: '100%',
+                            height: '100vh',
+                            backgroundColor: '#ef4444', // red-500
+                        }}
+                    >
+                        <button
+                            onClick={(e) => {
+                                if (overScroll >= 50 && !isDeletingAnim) {
+                                    e.stopPropagation();
+                                    setIsPulling(false);
+                                    executeDelete();
+                                }
+                            }}
+                            style={{ height: `${Math.max(0, overScroll)}px` }}
+                            className="flex flex-col items-center justify-center transition-all duration-300 w-full cursor-pointer focus:outline-none focus:bg-red-600 active:bg-red-600 z-10"
+                        >
+                            <div className={`flex flex-col items-center transition-transform duration-300 ${overScroll > 300 ? 'scale-110' : 'scale-90'}`}>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" className="w-6 h-6 mb-1 pointer-events-none">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                <span className="text-white font-bold tracking-wider text-xs pointer-events-none">
+                                    {overScroll > 300 ? 'RELEASE TO DELETE' : (!isPulling && overScroll > 50 ? 'TAP TO DELETE' : 'PULL TO DELETE')}
+                                </span>
+                            </div>
+                        </button>
+                    </div>
+                )}
+
                 {/* スクロールコンテンツ */}
-                <div className="flex-1 overflow-y-auto px-5 py-6 space-y-8">
+                <div
+                    className="flex-1 overflow-y-auto px-5 py-6 space-y-8 bg-white relative z-10"
+                    onTouchStart={handleContentTouchStart}
+                    onTouchMove={handleContentTouchMove}
+                    onTouchEnd={handleContentTouchEnd}
+                    onWheel={handleContentWheel}
+                    onScroll={handleMainContentScroll}
+                >
 
                     {/* 単語入力 */}
                     <div>

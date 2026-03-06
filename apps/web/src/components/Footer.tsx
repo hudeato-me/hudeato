@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router'
+import { Link, useLocation } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchWords } from '~/hooks/use-words'
 import { WordEntryDrawer } from './WordEntryDrawer'
@@ -68,6 +68,9 @@ export function Footer({ wordSetId }: { wordSetId?: string }) {
     partOfSpeech?: string
     mastered?: boolean
   }
+
+  const location = useLocation()
+  const currentPath = location.pathname
 
   const [searchMode, setSearchMode] = useState(false)
   const [isWordEntryOpen, setWordEntryOpen] = useState(false)
@@ -255,12 +258,19 @@ export function Footer({ wordSetId }: { wordSetId?: string }) {
             <SearchIcon />
           </button>
           <nav className="h-13 flex-1 rounded-full border border-black/10 bg-white/55 backdrop-blur-xl px-5 flex items-center justify-between text-black/65">
-            <Link to="/dashboard" className="h-10 w-10 flex items-center justify-center">
+            <Link
+              to="/dashboard"
+              className={`h-10 w-10 flex items-center justify-center transition-colors ${currentPath === '/dashboard' || !currentPath ? 'text-black' : ''}`}
+            >
               <HomeIcon />
             </Link>
-            <button type="button" className="h-10 w-10 flex items-center justify-center" aria-label="リスト">
+            <Link
+              to="/list"
+              className={`h-10 w-10 flex items-center justify-center transition-colors ${currentPath === '/list' ? 'text-black' : ''}`}
+              aria-label="リスト"
+            >
               <ListIcon />
-            </button>
+            </Link>
             <button type="button" className="h-10 w-10 flex items-center justify-center" aria-label="単語帳">
               <BookIcon />
             </button>

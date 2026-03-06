@@ -76,7 +76,7 @@ export function WordSetDrawer({
     <div
       className={`fixed inset-0 z-[70] transition-opacity duration-200 ${open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
-      aria-hidden={!open}
+      inert={!open}
     >
       <button
         type="button"

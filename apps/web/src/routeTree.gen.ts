@@ -10,23 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as ListRouteImport } from './routes/list'
-import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as ContentRouteImport } from './routes/_content'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ContentListRouteImport } from './routes/_content/list'
+import { Route as ContentDashboardRouteImport } from './routes/_content/dashboard'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ListRoute = ListRouteImport.update({
-  id: '/list',
-  path: '/list',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
+const ContentRoute = ContentRouteImport.update({
+  id: '/_content',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -34,38 +29,54 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ContentListRoute = ContentListRouteImport.update({
+  id: '/list',
+  path: '/list',
+  getParentRoute: () => ContentRoute,
+} as any)
+const ContentDashboardRoute = ContentDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => ContentRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRoute
-  '/list': typeof ListRoute
   '/login': typeof LoginRoute
+  '/dashboard': typeof ContentDashboardRoute
+  '/list': typeof ContentListRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRoute
-  '/list': typeof ListRoute
   '/login': typeof LoginRoute
+  '/dashboard': typeof ContentDashboardRoute
+  '/list': typeof ContentListRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRoute
-  '/list': typeof ListRoute
+  '/_content': typeof ContentRouteWithChildren
   '/login': typeof LoginRoute
+  '/_content/dashboard': typeof ContentDashboardRoute
+  '/_content/list': typeof ContentListRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dashboard' | '/list' | '/login'
+  fullPaths: '/' | '/login' | '/dashboard' | '/list'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dashboard' | '/list' | '/login'
-  id: '__root__' | '/' | '/dashboard' | '/list' | '/login'
+  to: '/' | '/login' | '/dashboard' | '/list'
+  id:
+    | '__root__'
+    | '/'
+    | '/_content'
+    | '/login'
+    | '/_content/dashboard'
+    | '/_content/list'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  DashboardRoute: typeof DashboardRoute
-  ListRoute: typeof ListRoute
+  ContentRoute: typeof ContentRouteWithChildren
   LoginRoute: typeof LoginRoute
 }
 
@@ -78,18 +89,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/list': {
-      id: '/list'
-      path: '/list'
-      fullPath: '/list'
-      preLoaderRoute: typeof ListRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
+    '/_content': {
+      id: '/_content'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof ContentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -99,13 +103,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_content/list': {
+      id: '/_content/list'
+      path: '/list'
+      fullPath: '/list'
+      preLoaderRoute: typeof ContentListRouteImport
+      parentRoute: typeof ContentRoute
+    }
+    '/_content/dashboard': {
+      id: '/_content/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof ContentDashboardRouteImport
+      parentRoute: typeof ContentRoute
+    }
   }
 }
 
+interface ContentRouteChildren {
+  ContentDashboardRoute: typeof ContentDashboardRoute
+  ContentListRoute: typeof ContentListRoute
+}
+
+const ContentRouteChildren: ContentRouteChildren = {
+  ContentDashboardRoute: ContentDashboardRoute,
+  ContentListRoute: ContentListRoute,
+}
+
+const ContentRouteWithChildren =
+  ContentRoute._addFileChildren(ContentRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  DashboardRoute: DashboardRoute,
-  ListRoute: ListRoute,
+  ContentRoute: ContentRouteWithChildren,
   LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport

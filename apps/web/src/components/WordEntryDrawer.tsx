@@ -1,5 +1,9 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useCreateWord, useUpdateWord, useWord, useDeleteWord } from '~/hooks/use-words';
+import React, { useRef, useEffect } from 'react';
+import { useWord } from '~/hooks/use-words';
+import { useWordEntryForm } from '~/hooks/word-entry/useWordEntryForm';
+import { useWordAutoSave } from '~/hooks/word-entry/useWordAutoSave';
+import { useSwipeToClose } from '~/hooks/word-entry/useSwipeToClose';
+import { usePullToDelete } from '~/hooks/word-entry/usePullToDelete';
 
 interface WordEntryDrawerProps {
     isOpen: boolean;
@@ -9,11 +13,75 @@ interface WordEntryDrawerProps {
 }
 
 export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: WordEntryDrawerProps) {
-    // 新規作成時に発行されたIDを内部で保持する
-    const [createdWordId, setCreatedWordId] = useState<string | null>(null);
+    // ==== フォーム入力管理 ====
+    const {
+        word,
+        setWord,
+        locationLabel,
+        setLocationLabel,
+        meanings,
+        setMeanings,
+        activeTab,
+        setActiveTab,
+        isAddingMeaning,
+        setIsAddingMeaning,
+        addMeaningTimeoutRef,
+        addMeaning,
+        removeMeaning,
+        updateMeaning,
+        buildPayload
+    } = useWordEntryForm();
 
-    // 実際に使用するWordId（既存のものか、今さっき作ったものか）
-    const effectiveWordId = existingWordId || createdWordId;
+    // ==== オートセーブ・API通信管理 ====
+    const {
+        effectiveWordId,
+        isSaving,
+        setIsSaving,
+        createdWordId,
+        setCreatedWordId,
+        lastSavedData,
+        handleClose,
+        deleteWord
+    } = useWordAutoSave({
+        wordSetId,
+        existingWordId,
+        isOpen,
+        word,
+        meanings,
+        locationLabel,
+        buildPayload,
+        onClose,
+        setWord,
+    });
+
+    // ==== 上スワイプで削除 ====
+    const {
+        overScroll,
+        setOverScroll,
+        isDeletingAnim,
+        setIsDeletingAnim,
+        isPulling,
+        contentTouchStartY,
+        initialOverScroll,
+        executeDelete,
+        handleContentTouchStart,
+        handleContentTouchMove,
+        handleContentTouchEnd,
+        handleContentWheel,
+        handleMainContentScroll
+    } = usePullToDelete({
+        effectiveWordId,
+        onDelete: deleteWord
+    });
+
+    // ==== 下スワイプで閉じる ====
+    const {
+        dragY,
+        setDragY,
+        handlePointerDown,
+        handlePointerMove,
+        handlePointerUp
+    } = useSwipeToClose({ handleClose });
 
     // 既存単語の取得
     const { data: existingData, isSuccess: isExistingDataReady } = useWord(
@@ -22,32 +90,10 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         isOpen && !!wordSetId && !!effectiveWordId
     );
 
-    const [word, setWord] = useState('');
-    const [locationLabel, setLocationLabel] = useState('');
-    // 複数のMeaningを配列で管理するState。初期状態は1つ。
-    const [meanings, setMeanings] = useState([
-        {
-            id: 1, // UI用ID
-            meaning: '',
-            partOfSpeech: '',
-            phonetic: '',
-            example: '',
-            collocation: '',
-            synonym: '',
-            etymology: '',
-            source: '',
-        },
-    ]);
-    const [activeTab, setActiveTab] = useState(0);
-
-    // カスタムフック
-    const { mutate: createWord, mutateAsync: createWordAsync } = useCreateWord(wordSetId ?? '');
-    const { mutate: updateWord, mutateAsync: updateWordAsync } = useUpdateWord(wordSetId ?? '');
-    const { mutateAsync: deleteWordAsync } = useDeleteWord(wordSetId ?? '');
-
-
-    // ドロワー内のデータの変更を検知するためのRef
-    const lastSavedData = useRef<string>('');
+    // ドロワー内の縦スクロール位置を管理するRef
+    const mainContentRef = useRef<HTMLDivElement>(null);
+    // Meaningタブ内の横スクロール位置を管理するRef
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     // ドロワー開いたときの初期化
     useEffect(() => {
@@ -114,104 +160,6 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         }
     }, [effectiveWordId, existingData, isOpen, createdWordId]);
 
-    // saveの状態を管理するState
-    const [isSaving, setIsSaving] = useState(false);
-
-    // debounceタイマーのRef（handleCloseでキャンセルするため外部に保持）
-    // ユーザーの入力から0.8秒待ってから保存するためのタイマー
-    const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-    // 現在のフォーム状態から送信用データをまとめる
-    // handleclose()で呼ぶためにuseEffectの外で定義→0.8秒待たなくても閉じることが出来る
-    const buildPayload = useCallback(() => {
-        return {
-            text: word,
-            locationLabel: locationLabel || null,
-            imageKey: null,
-            meanings: meanings.map((m, idx) => ({
-                meaning: m.meaning || '意味なし',
-                partOfSpeech: m.partOfSpeech || null,
-                phonetic: m.phonetic || null,
-                example: m.example || null,
-                collocation: m.collocation || null,
-                synonym: m.synonym || null,
-                etymology: m.etymology || null,
-                source: m.source || null,
-                slot: idx + 1,
-            })),
-        };
-    }, [word, locationLabel, meanings]);
-
-    // 変更監視＆オートセーブ
-    useEffect(() => {
-        // ドロワー未開閉、単語セット未選択、または単語未入力の場合はスキップ
-        if (!isOpen || !wordSetId || !word.trim()) return;
-
-        // 送信用のJSONデータの作成
-        const currentData = JSON.stringify(buildPayload());
-
-        // 初回ロード直後など、変更がない場合はスキップ
-        if (currentData === lastSavedData.current) return;
-
-        console.log('[DEBUG] Auto-save triggered. Difference detected.');
-        console.log(' - lastSavedData:', lastSavedData.current);
-        console.log(' - currentData:', currentData);
-
-        // useEffectが呼ばれたということは変更があったため、setIsSavingをtrueにして保存中を示す
-        setIsSaving(true);
-
-        // 0.8秒待ってから保存する
-        debounceTimerRef.current = setTimeout(async () => {
-            console.log('[DEBUG] Executing debounced save for effectiveWordId:', effectiveWordId);
-            const payload = buildPayload();
-
-            try {
-                // 既存の単語の更新である場合
-                if (effectiveWordId) {
-                    // Update
-                    console.log('[DEBUG] Calling updateWord API now');
-                    // updateWordAsyncを呼び出して保存
-                    await updateWordAsync({ wordId: effectiveWordId, data: payload });
-                    console.log('[DEBUG] Auto-save (updateWord) SUCCESS');
-                } else {
-                    // Create
-                    console.log('[DEBUG] Calling createWord API now for auto-save');
-                    // createWordAsyncを呼び出して保存
-                    const response = await createWordAsync(payload);
-                    console.log('[DEBUG] Auto-save (createWord) SUCCESS. New ID:', response.data?.id);
-                    // 新規作成された単語のIDを保持
-                    if (response.data && response.data.id) {
-                        // createdWordIdに保存
-                        setCreatedWordId(response.data.id);
-                    }
-                }
-            } catch (error) {
-                console.error('[DEBUG] Auto-save ERROR:', error);
-            } finally {
-                // 保存が完了したことを示す
-                setIsSaving(false);
-            }
-            // 保存が完了したら、lastSavedDataを更新
-            lastSavedData.current = currentData;
-        }, 800);
-
-        return () => {
-            if (debounceTimerRef.current) {
-                // タイマーをキャンセル
-                clearTimeout(debounceTimerRef.current);
-                // タイマーをリセット
-                debounceTimerRef.current = null;
-            }
-            // 次の処理に移る前にsetIsSavingをfalseに戻す
-            setIsSaving(false);
-        };
-    }, [word, meanings, locationLabel, isOpen, buildPayload, effectiveWordId, wordSetId, updateWordAsync, createWordAsync]);
-
-    // ドロワー内の縦スクロール位置を管理するRef
-    const mainContentRef = useRef<HTMLDivElement>(null);
-    // Meaningタブ内の横スクロール位置を管理するRef
-    const scrollContainerRef = useRef<HTMLDivElement>(null);
-
     // ドロワーが閉じたときのリセット処理
     useEffect(() => {
         // ドロワーが閉じられた場合
@@ -234,44 +182,6 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
             setActiveTab(0);
         }
     }, [isOpen]);
-
-    // スワイプをトリガーにすると処理が連続して走ってしまうため、スワイプ中かどうかの状態を管理する
-    const [isAddingMeaning, setIsAddingMeaning] = useState(false);
-    // スワイプで意味追加をするため、連続での追加を防ぐ必要がある。
-    // 1秒後にスワイプのロック状態を解除するタイマーのRef
-    const addMeaningTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-    // 新しい意味を追加する関数
-    const addMeaning = () => {
-        setMeanings([
-            ...meanings,
-            {
-                id: Date.now(),
-                meaning: '',
-                partOfSpeech: '',
-                phonetic: '',
-                example: '',
-                collocation: '',
-                synonym: '',
-                etymology: '',
-                source: '',
-            },
-        ]);
-    };
-
-    const removeMeaning = (indexToRemove: number) => {
-        if (meanings.length <= 1) return;
-        setMeanings(meanings.filter((_, idx) => idx !== indexToRemove));
-        if (activeTab >= indexToRemove && activeTab > 0) {
-            setActiveTab(activeTab - 1);
-        }
-    };
-
-    const updateMeaning = (index: number, field: string, value: string) => {
-        const updated = [...meanings];
-        updated[index] = { ...updated[index], [field]: value };
-        setMeanings(updated);
-    };
 
     const scrollToTab = (index: number) => {
         if (!scrollContainerRef.current) return;
@@ -334,213 +244,6 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
             document.body.style.overflow = '';
         };
     }, [isOpen]);
-
-    // 閉じる際の保存（最終バックアップ）
-    const handleClose = () => {
-        // 進行中のdebounceタイマーをキャンセル（二重保存の防止）
-        // autoSaveAsyncで閉じられた後にまた保存処理が走ることを防止
-        if (debounceTimerRef.current) {
-            clearTimeout(debounceTimerRef.current);
-            debounceTimerRef.current = null;
-        }
-
-        // 即座にドロワーを閉じる（保存はバックグラウンドで実行）
-        onClose();
-
-        // 保存対象がない場合は何もしない
-        if (!wordSetId || !word.trim()) return;
-
-        // handleClose内で保存データを呼ぶ
-        const currentData = JSON.stringify(buildPayload());
-        // データが保存されていないかどうかをチェック
-        // jsonで比較しなければいけない
-        const hasUnsavedChanges = currentData !== lastSavedData.current;
-
-        // 保存されていない場合は保存を実行
-        if (hasUnsavedChanges) {
-            lastSavedData.current = currentData;
-            const payload = buildPayload();
-            if (effectiveWordId) {
-                updateWordAsync({ wordId: effectiveWordId, data: payload }).catch(console.error);
-            } else {
-                createWordAsync(payload).catch(console.error);
-            }
-        }
-    };
-
-    const [overScroll, setOverScroll] = useState(0);
-    const [isDeletingAnim, setIsDeletingAnim] = useState(false);
-    const [isPulling, setIsPulling] = useState(false);
-
-    const executeDelete = async () => {
-        // 単語か単語セットのIDが無い場合はスキップ
-        if (!effectiveWordId || !wordSetId) return;
-
-        setIsDeletingAnim(true);
-
-        // 即座に保存フラグを折り、非同期で削除を実行
-        lastSavedData.current = '';
-        setWord('');
-
-        deleteWordAsync(effectiveWordId).catch(error => {
-            console.error('Failed to delete word:', error);
-            setIsDeletingAnim(false);
-            setOverScroll(0);
-        });
-
-        // 上に飛んで消えるアニメーションを一瞬見せてから即座にドロワーを閉じる
-        setTimeout(() => {
-            onClose();
-        }, 400);
-    };
-
-    // ドロワーを上スワイプして削除
-    // タッチしたところのy座標
-    const contentTouchStartY = useRef<number | null>(null);
-    // タッチした時点でどれだけスクロールされていたか
-    const initialOverScroll = useRef<number>(0);
-    // PCのマウスホイール検知用タイマー（PCでのスワイプは後々消すかもだが、一旦開発環境では実装）
-    const wheelTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-    const handleContentTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-        // 単語IDが無い場合はスキップ
-        if (!effectiveWordId) return;
-        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-        // もし一番下まで到達しているなら
-        if (Math.ceil(scrollTop + clientHeight) >= scrollHeight - 5 || overScroll > 0) {
-            // 最初のタッチ位置
-            contentTouchStartY.current = e.touches[0].clientY;
-            // スクロール量
-            initialOverScroll.current = overScroll;
-            setIsPulling(true);
-        }
-    };
-
-    const handleContentTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
-        if (!effectiveWordId || contentTouchStartY.current === null) return;
-        // 今の座標
-        const currentY = e.touches[0].clientY;
-        // 初期位置とのdiff
-        const diff = contentTouchStartY.current - currentY;
-        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-        // もし一番下付近までスクロールされたら
-        if (Math.ceil(scrollTop + clientHeight) >= scrollHeight - 5 || overScroll > 0) {
-            // Deleteするためのスクロールに抵抗をつける。
-            let newOverScroll = initialOverScroll.current + diff * 0.5; // Resistance
-            if (newOverScroll < 0) newOverScroll = 0;
-
-            setOverScroll(newOverScroll);
-
-            // 一定値以上スクロールされるとそのまま削除
-            if (newOverScroll > 350 && !isDeletingAnim) {
-                setIsPulling(false);
-                contentTouchStartY.current = null;
-                executeDelete();
-            }
-        }
-    };
-
-    // 上スワイプして話したときのスクロール制御
-    const handleContentTouchEnd = () => {
-        if (!effectiveWordId || contentTouchStartY.current === null) return;
-        setIsPulling(false);
-        contentTouchStartY.current = null;
-
-        // 300以上だと
-        if (overScroll > 300) {
-            executeDelete();
-        } else if (overScroll > 50) {
-            // 準安定状態にスナップ
-            setOverScroll(150);
-        } else {
-            // 元に戻る
-            setOverScroll(0);
-        }
-    };
-
-    const handleContentWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-        if (!effectiveWordId) return;
-        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-        if (Math.ceil(scrollTop + clientHeight) >= scrollHeight - 5 || overScroll > 0) {
-            setIsPulling(true);
-
-            if (e.deltaY > 0) {
-                setOverScroll(prev => {
-                    const next = prev + e.deltaY * 0.3;
-                    if (next > 350 && !isDeletingAnim) {
-                        setTimeout(() => executeDelete(), 0);
-                    }
-                    return next;
-                });
-            } else if (e.deltaY < 0 && overScroll > 0) {
-                setOverScroll(prev => Math.max(0, prev + e.deltaY * 0.3));
-            }
-
-            if (wheelTimeoutRef.current) clearTimeout(wheelTimeoutRef.current);
-            wheelTimeoutRef.current = setTimeout(() => {
-                setIsPulling(false);
-                setOverScroll(prev => {
-                    if (prev > 300) {
-                        executeDelete();
-                        return prev;
-                    } else if (prev > 50) {
-                        return 150; // 準安定
-                    } else {
-                        return 0; // 戻る
-                    }
-                });
-            }, 150);
-        }
-    };
-
-    // ユーザーがドロワー内で上から下にスクロールした時に、overScrollを0にして削除ボタンを閉じる
-    const handleMainContentScroll = (e: React.UIEvent<HTMLDivElement>) => {
-        if (overScroll > 0) {
-            const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-            if (Math.ceil(scrollTop + clientHeight) < scrollHeight - 5) {
-                setOverScroll(0);
-            }
-        }
-    };
-
-    // スワイプでドロワーを閉じる機構
-    // どれくらい下にスワイプされているか
-    const [dragY, setDragY] = useState(0);
-    // 最初のタッチした座標
-    const startY = useRef<number | null>(null);
-
-    // ドロワー上部のつまみをつかんだ時に発火する処理
-    const handlePointerDown = (e: React.PointerEvent) => {
-        // キャプチャすることで、要素外まで指がずれてもドラッグされる
-        e.currentTarget.setPointerCapture(e.pointerId);
-        startY.current = e.clientY;
-    };
-    // スワイプ量の計算
-    const handlePointerMove = (e: React.PointerEvent) => {
-        if (startY.current === null) return;
-
-        const diff = e.clientY - startY.current;
-
-        // 下方向のドラッグのみ許可
-        if (diff > 0) {
-            setDragY(diff);
-        }
-    };
-
-    // ドロワー上部のつまみを話したときに発火する処理
-    const handlePointerUp = (e: React.PointerEvent) => {
-        if (startY.current === null) return;
-
-        e.currentTarget.releasePointerCapture(e.pointerId);
-        startY.current = null;
-
-        if (dragY > 50) {
-            // 閾値を超えたら閉じる（dragYを維持してスナップバックを防ぐ）
-            handleClose();
-        } else {
-            setDragY(0);
-        }
-    };
 
     // ドラッグ中のスタイル
     const currentTranslateY = isDeletingAnim ? '-100vh' : (dragY > 0 ? dragY : (overScroll > 0 ? -overScroll : 0));
@@ -623,7 +326,6 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
                             onClick={(e) => {
                                 if (overScroll >= 50 && !isDeletingAnim) {
                                     e.stopPropagation();
-                                    setIsPulling(false);
                                     executeDelete();
                                 }
                             }}
@@ -631,7 +333,6 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
                                 e.stopPropagation(); // Make sure this element handles the drag exclusively
                                 contentTouchStartY.current = e.touches[0].clientY;
                                 initialOverScroll.current = overScroll;
-                                setIsPulling(true);
                             }}
                             onTouchMove={(e) => {
                                 e.stopPropagation();
@@ -644,7 +345,6 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
                                 setOverScroll(newOverScroll);
 
                                 if (newOverScroll > 350 && !isDeletingAnim) {
-                                    setIsPulling(false);
                                     contentTouchStartY.current = null;
                                     executeDelete();
                                 }

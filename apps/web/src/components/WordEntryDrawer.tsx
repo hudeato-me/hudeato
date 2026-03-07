@@ -24,7 +24,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
 
     const [word, setWord] = useState('');
     const [locationLabel, setLocationLabel] = useState('');
-    // 複数のMeaningを配列で管理するステート。初期状態は1つ。
+    // 複数のMeaningを配列で管理するState。初期状態は1つ。
     const [meanings, setMeanings] = useState([
         {
             id: 1, // UI用ID
@@ -45,13 +45,18 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
     const { mutate: updateWord, mutateAsync: updateWordAsync } = useUpdateWord(wordSetId ?? '');
     const { mutateAsync: deleteWordAsync } = useDeleteWord(wordSetId ?? '');
 
-    // データ初期化（既存データがある場合）
+
+    // ドロワー内のデータの変更を検知するためのRef
+    const lastSavedData = useRef<string>('');
+
+    // ドロワー開いたときの初期化
     useEffect(() => {
+        // 既存単語のデータがある場合、それをセットする
         if (existingWordId && existingData?.data) {
             const data = existingData.data;
             setWord(data.text);
             setLocationLabel(data.locationLabel ?? '');
-
+            // 意味の配列をセットする
             if (data.meanings && data.meanings.length > 0) {
                 setMeanings(
                     data.meanings.map((m: any, idx: number) => ({
@@ -67,8 +72,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
                     }))
                 );
             }
-            // データセット後に、初期状態としてlastSavedDataを更新（不要な保存を防ぐため）
-            // stateへのセットが非同期のため、ここではdataから直接payload相当の文字列を作るのが確実です
+            // 自動保存を機能させるためにドロワーを開いた初期状態をlastSavedDataとして保存
             const initPayload = {
                 text: data.text,
                 locationLabel: data.locationLabel ?? null,
@@ -87,8 +91,9 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
                     }))
                     : [{ meaning: '意味なし', partOfSpeech: null, phonetic: null, example: null, collocation: null, synonym: null, etymology: null, source: null, slot: 1 }]
             };
-            // 既存データの初期文字列としてRefに保持
+            // 既存データの初期文字列としてRefに保持→自動保存でdiffを見るための比較用
             lastSavedData.current = JSON.stringify(initPayload);
+            // 新しい単語を作成する場合
         } else if (!effectiveWordId && isOpen && !createdWordId) {
             // 新規作成用にリセット（かつ、内部で作成された直後でない場合）
             let initialMeaning = {
@@ -109,15 +114,15 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         }
     }, [effectiveWordId, existingData, isOpen, createdWordId]);
 
-    // ==== リアルタイム保存 (Auto Save) 機構 ====
+    // saveの状態を管理するState
     const [isSaving, setIsSaving] = useState(false);
 
-    // 入力データの変更を追跡するRef
-    const lastSavedData = useRef<string>('');
     // debounceタイマーのRef（handleCloseでキャンセルするため外部に保持）
+    // ユーザーの入力から0.8秒待ってから保存するためのタイマー
     const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-    // 現在のフォーム状態から送信用データを組み立てる
+    // 現在のフォーム状態から送信用データをまとめる
+    // handleclose()で呼ぶためにuseEffectの外で定義→0.8秒待たなくても閉じることが出来る
     const buildPayload = useCallback(() => {
         return {
             text: word,
@@ -139,8 +144,10 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
 
     // 変更監視＆オートセーブ
     useEffect(() => {
+        // ドロワー未開閉、単語セット未選択、または単語未入力の場合はスキップ
         if (!isOpen || !wordSetId || !word.trim()) return;
 
+        // 送信用のJSONデータの作成
         const currentData = JSON.stringify(buildPayload());
 
         // 初回ロード直後など、変更がない場合はスキップ
@@ -150,74 +157,91 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         console.log(' - lastSavedData:', lastSavedData.current);
         console.log(' - currentData:', currentData);
 
+        // useEffectが呼ばれたということは変更があったため、setIsSavingをtrueにして保存中を示す
         setIsSaving(true);
 
+        // 0.8秒待ってから保存する
         debounceTimerRef.current = setTimeout(async () => {
             console.log('[DEBUG] Executing debounced save for effectiveWordId:', effectiveWordId);
             const payload = buildPayload();
 
             try {
+                // 既存の単語の更新である場合
                 if (effectiveWordId) {
                     // Update
                     console.log('[DEBUG] Calling updateWord API now');
+                    // updateWordAsyncを呼び出して保存
                     await updateWordAsync({ wordId: effectiveWordId, data: payload });
                     console.log('[DEBUG] Auto-save (updateWord) SUCCESS');
                 } else {
                     // Create
                     console.log('[DEBUG] Calling createWord API now for auto-save');
+                    // createWordAsyncを呼び出して保存
                     const response = await createWordAsync(payload);
                     console.log('[DEBUG] Auto-save (createWord) SUCCESS. New ID:', response.data?.id);
+                    // 新規作成された単語のIDを保持
                     if (response.data && response.data.id) {
+                        // createdWordIdに保存
                         setCreatedWordId(response.data.id);
                     }
                 }
             } catch (error) {
                 console.error('[DEBUG] Auto-save ERROR:', error);
             } finally {
+                // 保存が完了したことを示す
                 setIsSaving(false);
             }
-
+            // 保存が完了したら、lastSavedDataを更新
             lastSavedData.current = currentData;
         }, 800);
 
         return () => {
             if (debounceTimerRef.current) {
+                // タイマーをキャンセル
                 clearTimeout(debounceTimerRef.current);
+                // タイマーをリセット
                 debounceTimerRef.current = null;
             }
-            // タイマーがキャンセルされた場合は、保存が実行されなかったことを意味するのでisSavingをfalseに戻す
+            // 次の処理に移る前にsetIsSavingをfalseに戻す
             setIsSaving(false);
         };
     }, [word, meanings, locationLabel, isOpen, buildPayload, effectiveWordId, wordSetId, updateWordAsync, createWordAsync]);
 
+    // ドロワー内の縦スクロール位置を管理するRef
+    const mainContentRef = useRef<HTMLDivElement>(null);
+    // Meaningタブ内の横スクロール位置を管理するRef
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+
     // ドロワーが閉じたときのリセット処理
     useEffect(() => {
+        // ドロワーが閉じられた場合
         if (!isOpen) {
+            // lastSavedDataをリセット
             lastSavedData.current = '';
+            // 保存状態をリセット
             setIsSaving(false);
+            // ドロワーを下スワイプした量をリセット
             setOverScroll(0);
+            // 削除アニメーションをリセット
             setIsDeletingAnim(false);
+            // 新規作成された単語のIDをリセット
             setCreatedWordId(null);
             // ドロワーの位置を初期化
             setDragY(0);
-            // スクロール位置を初期化
+            // ドロワー内のスクロール位置を初期化
             mainContentRef.current?.scrollTo(0, 0);
             scrollContainerRef.current?.scrollTo(0, 0);
             setActiveTab(0);
         }
     }, [isOpen]);
 
-    const mainContentRef = useRef<HTMLDivElement>(null);
-    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    // スワイプをトリガーにすると処理が連続して走ってしまうため、スワイプ中かどうかの状態を管理する
+    const [isAddingMeaning, setIsAddingMeaning] = useState(false);
+    // スワイプで意味追加をするため、連続での追加を防ぐ必要がある。
+    // 1秒後にスワイプのロック状態を解除するタイマーのRef
+    const addMeaningTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    // 横スクロールイベントを監視してアクティブなタブを更新
-    const handleScroll = () => {
-        if (!scrollContainerRef.current) return;
-        const { scrollLeft, clientWidth } = scrollContainerRef.current;
-        const index = Math.round(scrollLeft / clientWidth);
-        setActiveTab(index);
-    };
-
+    // 新しい意味を追加する関数
     const addMeaning = () => {
         setMeanings([
             ...meanings,
@@ -258,13 +282,54 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         });
     };
 
+    // 横スクロールイベントを監視してアクティブなタブを更新 & 引っ張って追加
+    const handleScroll = () => {
+        // scrollContainerRefが存在しない場合はスキップ
+        if (!scrollContainerRef.current) return;
+        // 横スクロール位置を取得
+        const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
+        // 現在のタブを更新
+        const index = Math.round(scrollLeft / clientWidth);
+        // 現在のタブを更新
+        setActiveTab(index);
+
+        // 右へ強く引っ張られた時に引っ張りを検知して追加
+        // スクロール可能な幅 (scrollWidth) を、表示領域 + スクロール量で 110px 以上超えたら追加
+        // isOverscrollingRightがtrueの場合は、最後のタブであることが示される
+        const isOverscrollingRight = scrollLeft + clientWidth > scrollWidth + 110;
+
+        // 最後のタブが表示されており、さらに「力強く」スクロールしようとしたタイミングで追加判定
+        if (isOverscrollingRight && meanings.length < 5 && !isAddingMeaning) {
+            setIsAddingMeaning(true);
+
+            // 実際に追加処理を呼ぶ
+            addMeaning();
+
+            // 確実に追加されたタブへスクロールさせるために少し待つ
+            setTimeout(() => {
+                const newIndex = meanings.length;
+                setActiveTab(newIndex);
+                scrollToTab(newIndex);
+            }, 100);
+
+            // 1秒間は連続して追加しないようロックする
+            if (addMeaningTimeoutRef.current) clearTimeout(addMeaningTimeoutRef.current);
+            addMeaningTimeoutRef.current = setTimeout(() => {
+                setIsAddingMeaning(false);
+            }, 1000);
+        }
+    };
+
     // ドロワー開閉時のbodyのスクロール制御
     useEffect(() => {
+        // ドロワーを開くとbodyはスクロールされない
         if (isOpen) {
             document.body.style.overflow = 'hidden';
+            // ドロワーを閉じるとbodyはスクロールできる
         } else {
             document.body.style.overflow = '';
         }
+        // ドロワーが閉じられたときにbodyのスクロール制御を解除する（ブラウザの戻るボタンなどでドロワーが解除された場合）
         return () => {
             document.body.style.overflow = '';
         };
@@ -272,7 +337,8 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
 
     // 閉じる際の保存（最終バックアップ）
     const handleClose = () => {
-        // 進行中のdebounceタイマーをキャンセル（二重保存防止）
+        // 進行中のdebounceタイマーをキャンセル（二重保存の防止）
+        // autoSaveAsyncで閉じられた後にまた保存処理が走ることを防止
         if (debounceTimerRef.current) {
             clearTimeout(debounceTimerRef.current);
             debounceTimerRef.current = null;
@@ -281,11 +347,16 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         // 即座にドロワーを閉じる（保存はバックグラウンドで実行）
         onClose();
 
+        // 保存対象がない場合は何もしない
         if (!wordSetId || !word.trim()) return;
 
+        // handleClose内で保存データを呼ぶ
         const currentData = JSON.stringify(buildPayload());
+        // データが保存されていないかどうかをチェック
+        // jsonで比較しなければいけない
         const hasUnsavedChanges = currentData !== lastSavedData.current;
 
+        // 保存されていない場合は保存を実行
         if (hasUnsavedChanges) {
             lastSavedData.current = currentData;
             const payload = buildPayload();
@@ -297,59 +368,49 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         }
     };
 
-    // 削除処理（ゴミ箱ボタンから呼ばれるレガシー）
-    const handleDelete = async () => {
-        if (!existingWordId || !wordSetId) return;
-
-        const confirmDelete = window.confirm('Are you sure you want to delete this word?');
-        if (!confirmDelete) return;
-
-        executeDelete();
-    };
+    const [overScroll, setOverScroll] = useState(0);
+    const [isDeletingAnim, setIsDeletingAnim] = useState(false);
+    const [isPulling, setIsPulling] = useState(false);
 
     const executeDelete = async () => {
+        // 単語か単語セットのIDが無い場合はスキップ
         if (!effectiveWordId || !wordSetId) return;
 
-        // Vibrate for feedback if available
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-            navigator.vibrate(50);
-        }
-
         setIsDeletingAnim(true);
-        setIsSaving(true);
 
-        // 即座に保存フラグを折り、非同期で削除を実行（UIブロックしない）
+        // 即座に保存フラグを折り、非同期で削除を実行
         lastSavedData.current = '';
         setWord('');
 
         deleteWordAsync(effectiveWordId).catch(error => {
             console.error('Failed to delete word:', error);
-            setIsSaving(false);
             setIsDeletingAnim(false);
             setOverScroll(0);
         });
 
         // 上に飛んで消えるアニメーションを一瞬見せてから即座にドロワーを閉じる
         setTimeout(() => {
-            setIsSaving(false);
             onClose();
-        }, 200);
+        }, 400);
     };
 
-    // ==== 引き上げて削除 (Overscroll / Pull up to Delete) ====
-    const [overScroll, setOverScroll] = useState(0);
-    const [isDeletingAnim, setIsDeletingAnim] = useState(false);
-    const [isPulling, setIsPulling] = useState(false);
-
+    // ドロワーを上スワイプして削除
+    // タッチしたところのy座標
     const contentTouchStartY = useRef<number | null>(null);
+    // タッチした時点でどれだけスクロールされていたか
     const initialOverScroll = useRef<number>(0);
+    // PCのマウスホイール検知用タイマー（PCでのスワイプは後々消すかもだが、一旦開発環境では実装）
     const wheelTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const handleContentTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+        // 単語IDが無い場合はスキップ
         if (!effectiveWordId) return;
         const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+        // もし一番下まで到達しているなら
         if (Math.ceil(scrollTop + clientHeight) >= scrollHeight - 5 || overScroll > 0) {
+            // 最初のタッチ位置
             contentTouchStartY.current = e.touches[0].clientY;
+            // スクロール量
             initialOverScroll.current = overScroll;
             setIsPulling(true);
         }
@@ -357,11 +418,14 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
 
     const handleContentTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
         if (!effectiveWordId || contentTouchStartY.current === null) return;
+        // 今の座標
         const currentY = e.touches[0].clientY;
-        const diff = contentTouchStartY.current - currentY; // positive = pulling up
-
+        // 初期位置とのdiff
+        const diff = contentTouchStartY.current - currentY;
         const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+        // もし一番下付近までスクロールされたら
         if (Math.ceil(scrollTop + clientHeight) >= scrollHeight - 5 || overScroll > 0) {
+            // Deleteするためのスクロールに抵抗をつける。
             let newOverScroll = initialOverScroll.current + diff * 0.5; // Resistance
             if (newOverScroll < 0) newOverScroll = 0;
 
@@ -376,11 +440,13 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         }
     };
 
+    // 上スワイプして話したときのスクロール制御
     const handleContentTouchEnd = () => {
         if (!effectiveWordId || contentTouchStartY.current === null) return;
         setIsPulling(false);
         contentTouchStartY.current = null;
 
+        // 300以上だと
         if (overScroll > 300) {
             executeDelete();
         } else if (overScroll > 50) {
@@ -427,6 +493,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         }
     };
 
+    // ユーザーがドロワー内で上から下にスクロールした時に、overScrollを0にして削除ボタンを閉じる
     const handleMainContentScroll = (e: React.UIEvent<HTMLDivElement>) => {
         if (overScroll > 0) {
             const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
@@ -436,16 +503,19 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         }
     };
 
-    // ==== ドラッグ（スワイプ）で閉じる機構 (Pointer Events) ====
+    // スワイプでドロワーを閉じる機構
+    // どれくらい下にスワイプされているか
     const [dragY, setDragY] = useState(0);
+    // 最初のタッチした座標
     const startY = useRef<number | null>(null);
 
+    // ドロワー上部のつまみをつかんだ時に発火する処理
     const handlePointerDown = (e: React.PointerEvent) => {
-        // キャプチャすることで、ドラッグ中にマウスや指が要素外に出てもイベントを追跡できる
+        // キャプチャすることで、要素外まで指がずれてもドラッグされる
         e.currentTarget.setPointerCapture(e.pointerId);
         startY.current = e.clientY;
     };
-
+    // スワイプ量の計算
     const handlePointerMove = (e: React.PointerEvent) => {
         if (startY.current === null) return;
 
@@ -457,6 +527,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         }
     };
 
+    // ドロワー上部のつまみを話したときに発火する処理
     const handlePointerUp = (e: React.PointerEvent) => {
         if (startY.current === null) return;
 
@@ -482,6 +553,13 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
     const drawerStyle = (isOpen || isDeletingAnim)
         ? { transform: `translateY(${currentTranslateY}${typeof currentTranslateY === 'number' ? 'px' : ''})`, transition: transitionStyle, height: '95vh' }
         : { transform: 'translateY(100%)', height: '95vh', transition: 'transform 0.3s ease-in-out' };
+
+    // クリーンアップ
+    useEffect(() => {
+        return () => {
+            if (addMeaningTimeoutRef.current) clearTimeout(addMeaningTimeoutRef.current);
+        };
+    }, []);
 
     return (
         <div
@@ -549,8 +627,34 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
                                     executeDelete();
                                 }
                             }}
+                            onTouchStart={(e) => {
+                                e.stopPropagation(); // Make sure this element handles the drag exclusively
+                                contentTouchStartY.current = e.touches[0].clientY;
+                                initialOverScroll.current = overScroll;
+                                setIsPulling(true);
+                            }}
+                            onTouchMove={(e) => {
+                                e.stopPropagation();
+                                if (contentTouchStartY.current === null) return;
+                                const currentY = e.touches[0].clientY;
+                                const diff = contentTouchStartY.current - currentY;
+
+                                let newOverScroll = initialOverScroll.current + diff * 0.8; // Stronger resistance since dragging the button directly
+                                if (newOverScroll < 0) newOverScroll = 0;
+                                setOverScroll(newOverScroll);
+
+                                if (newOverScroll > 350 && !isDeletingAnim) {
+                                    setIsPulling(false);
+                                    contentTouchStartY.current = null;
+                                    executeDelete();
+                                }
+                            }}
+                            onTouchEnd={(e) => {
+                                e.stopPropagation();
+                                handleContentTouchEnd();
+                            }}
                             style={{ height: `${Math.max(0, overScroll)}px` }}
-                            className="flex flex-col items-center justify-center transition-all duration-300 w-full cursor-pointer focus:outline-none focus:bg-red-600 active:bg-red-600 z-10"
+                            className="flex flex-col items-center justify-center transition-all duration-300 w-full cursor-pointer focus:outline-none focus:bg-red-600 active:bg-red-600 z-10 touch-none"
                         >
                             <div className={`flex flex-col items-center transition-transform duration-300 ${overScroll > 300 ? 'scale-110' : 'scale-90'}`}>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" className="w-6 h-6 mb-1 pointer-events-none">
@@ -630,12 +734,12 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
                         {/* 横スクロール Meaningコンテナ */}
                         <div
                             ref={scrollContainerRef}
-                            className="w-full flex overflow-x-auto snap-x snap-mandatory no-scrollbar pb-2 pt-2 -mx-5 px-5"
+                            className="flex overflow-x-auto snap-x snap-mandatory no-scrollbar pb-2 pt-2 -mx-5 px-5"
                             onScroll={handleScroll}
                             style={{ scrollBehavior: 'smooth' }}
                         >
                             {meanings.map((item, idx) => (
-                                <div key={item.id} className="w-full shrink-0 snap-start pr-5 lg:pr-0">
+                                <div key={item.id} className="w-full shrink-0 snap-start pr-5">
                                     <div className="border border-gray-100 bg-gray-50/50 rounded-3xl p-5 space-y-6">
                                         <div className="flex items-center justify-between">
                                             <span className="text-sm text-gray-500 font-medium">Meaning {idx + 1}</span>
@@ -742,6 +846,10 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
                                     </div>
                                 </div>
                             ))}
+                            {/* スクロール領域を必ず確保してスワイプ可能にするための見えないスペーサー */}
+                            {meanings.length >= 1 && (
+                                <div className="w-[10px] shrink-0 pointer-events-none" />
+                            )}
                         </div>
                     </div>
 

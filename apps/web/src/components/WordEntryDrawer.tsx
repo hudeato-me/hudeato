@@ -200,9 +200,14 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
             setCreatedWordId(null);
             // ドロワーの位置を初期化
             setDragY(0);
+            // スクロール位置を初期化
+            mainContentRef.current?.scrollTo(0, 0);
+            scrollContainerRef.current?.scrollTo(0, 0);
+            setActiveTab(0);
         }
     }, [isOpen]);
 
+    const mainContentRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     // 横スクロールイベントを監視してアクティブなタブを更新
@@ -458,7 +463,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         e.currentTarget.releasePointerCapture(e.pointerId);
         startY.current = null;
 
-        if (dragY > 200) {
+        if (dragY > 50) {
             // 閾値を超えたら閉じる（dragYを維持してスナップバックを防ぐ）
             handleClose();
         } else {
@@ -561,6 +566,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
 
                 {/* スクロールコンテンツ */}
                 <div
+                    ref={mainContentRef}
                     className="flex-1 overflow-y-auto px-5 py-6 space-y-8 bg-white relative z-10"
                     onTouchStart={handleContentTouchStart}
                     onTouchMove={handleContentTouchMove}

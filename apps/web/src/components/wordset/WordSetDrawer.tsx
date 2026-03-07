@@ -6,7 +6,7 @@ const DRAWER_CLOSE_THRESHOLD = 72;
 interface WordSetDrawerProps {
   open: boolean
   selectedSetId: string
-  sets: { id: string; name: string }[]
+  sets: { id: string; name: string; wordCount?: number }[]
   onClose: () => void
   onSelect: (setId: string) => void
 }
@@ -232,10 +232,10 @@ export function WordSetDrawer({
               // 通常表示
               return (
                 <li key={set.id} className="relative">
-                  <div className="w-full h-14 px-2 rounded-xl flex items-center justify-between">
+                  <div className={`w-full h-14 px-2 rounded-xl flex items-center justify-between transition-colors ${active ? 'bg-black/5' : ''}`}>
                     <button
                       type="button"
-                      className="flex-1 h-full flex items-center text-left"
+                      className="flex-1 h-full flex items-center text-left gap-2"
                       onClick={() => {
                         resetStates()
                         onSelect(set.id)
@@ -243,7 +243,7 @@ export function WordSetDrawer({
                       }}
                     >
                       <span className="text-sm text-black/80">{set.name}</span>
-                      {active && <span className="ml-2 text-base text-black/75">✓</span>}
+                      <span className="text-[0.7rem] text-black/40 font-medium tracking-wide">{set.wordCount ?? 0} words</span>
                     </button>
                     <button
                       type="button"

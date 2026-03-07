@@ -1,8 +1,8 @@
-import { createFileRoute, Outlet, redirect, useRouterState } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 import { useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
 import { Header } from '~/components/Header'
 import { Footer } from '~/components/Footer'
+import { AnimatedOutlet } from '~/components/AnimatedOutlet'
 import { WordSetDrawer } from '~/components/wordset/WordSetDrawer'
 import { authClient } from '~/lib/auth-client'
 import { useQueryClient } from '@tanstack/react-query'
@@ -35,8 +35,7 @@ function ContentLayout() {
     const { data: wordSets = [] } = useWordSets(true)
     const selectedWordSetId = selectedIdState ?? wordSets[0]?.id ?? null
     const selectedWordSetName = wordSets.find((s: WordSet) => s.id === selectedWordSetId)?.name ?? ''
-    // ルート以下のパスの変更を監視
-    const pathname = useRouterState({ select: (s) => s.location.pathname })
+
 
     return (
         <ContentContext.Provider value={{ selectedWordSetId, wordSets }}>
@@ -52,18 +51,7 @@ function ContentLayout() {
                             await del('REACT_QUERY_OFFLINE_CACHE')
                         }}
                     />
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            // パスが変わったら、新しいコンポーネントをマウントする
-                            key={pathname}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-                        >
-                            <Outlet />
-                        </motion.div>
-                    </AnimatePresence>
+                    <AnimatedOutlet />
                 </div>
 
                 <WordSetDrawer

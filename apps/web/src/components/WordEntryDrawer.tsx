@@ -78,9 +78,13 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
     const {
         dragY,
         setDragY,
+        isSwipingDown,
         handlePointerDown,
         handlePointerMove,
-        handlePointerUp
+        handlePointerUp,
+        handleContentSwipeStart,
+        handleContentSwipeMove,
+        handleContentSwipeEnd
     } = useSwipeToClose({ handleClose });
 
     // 既存単語の取得
@@ -372,9 +376,24 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
                 <div
                     ref={mainContentRef}
                     className="flex-1 overflow-y-auto px-5 py-6 space-y-8 bg-white relative z-10"
-                    onTouchStart={handleContentTouchStart}
-                    onTouchMove={handleContentTouchMove}
-                    onTouchEnd={handleContentTouchEnd}
+                    onTouchStart={(e) => {
+                        // 上スワイプ削除 + 下スワイプ閉じる の両方を処理
+                        handleContentTouchStart(e);
+                        handleContentSwipeStart(e);
+                    }}
+                    onTouchMove={(e) => {
+                        // 下スワイプで閉じる動作中は、削除処理を無視する
+                        if (isSwipingDown) {
+                            handleContentSwipeMove(e);
+                        } else {
+                            handleContentTouchMove(e);
+                            handleContentSwipeMove(e);
+                        }
+                    }}
+                    onTouchEnd={(e) => {
+                        handleContentTouchEnd();
+                        handleContentSwipeEnd();
+                    }}
                     onWheel={handleContentWheel}
                     onScroll={handleMainContentScroll}
                 >

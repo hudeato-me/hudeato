@@ -21,6 +21,17 @@
     box-sizing: border-box;
   }
 
+  button,
+  [role='button'],
+  a,
+  summary,
+  select,
+  [type='button'],
+  [type='submit'],
+  [type='reset'] {
+    cursor: pointer;
+  }
+
   html,
   body {
     font-family: 'Inter', system-ui, -apple-system, sans-serif;

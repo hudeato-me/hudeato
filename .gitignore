@@ -17,3 +17,6 @@ local.db-shm
 
 # agent
 .agent
+
+# claude
+.claude

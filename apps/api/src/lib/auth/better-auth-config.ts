@@ -37,6 +37,6 @@ export const betterAuthConfig = (
 		},
 		plugins: [openAPI()],
 		baseURL: betterAuthBaseUrl,
-		trustedOrigins: ["http://localhost:3000", "http://localhost:5173"],
+		trustedOrigins: ["http://localhost:3000", "http://localhost:5173", "http://192.168.10.103:3000"],
 	})
 }

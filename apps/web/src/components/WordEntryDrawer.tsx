@@ -114,6 +114,8 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
 
     // 入力データの変更を追跡するRef
     const lastSavedData = useRef<string>('');
+    // debounceタイマーのRef（handleCloseでキャンセルするため外部に保持）
+    const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     // 現在のフォーム状態から送信用データを組み立てる
     const buildPayload = useCallback(() => {
@@ -150,7 +152,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
 
         setIsSaving(true);
 
-        const debouncedSave = setTimeout(async () => {
+        debounceTimerRef.current = setTimeout(async () => {
             console.log('[DEBUG] Executing debounced save for effectiveWordId:', effectiveWordId);
             const payload = buildPayload();
 
@@ -179,7 +181,10 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         }, 800);
 
         return () => {
-            clearTimeout(debouncedSave);
+            if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current);
+                debounceTimerRef.current = null;
+            }
             // タイマーがキャンセルされた場合は、保存が実行されなかったことを意味するのでisSavingをfalseに戻す
             setIsSaving(false);
         };
@@ -193,6 +198,8 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
             setOverScroll(0);
             setIsDeletingAnim(false);
             setCreatedWordId(null);
+            // ドロワーの位置を初期化
+            setDragY(0);
         }
     }, [isOpen]);
 
@@ -259,30 +266,29 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
     }, [isOpen]);
 
     // 閉じる際の保存（最終バックアップ）
-    const handleClose = async () => {
-        if (!wordSetId || !word.trim()) {
-            onClose();
-            return;
+    const handleClose = () => {
+        // 進行中のdebounceタイマーをキャンセル（二重保存防止）
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+            debounceTimerRef.current = null;
         }
+
+        // 即座にドロワーを閉じる（保存はバックグラウンドで実行）
+        onClose();
+
+        if (!wordSetId || !word.trim()) return;
 
         const currentData = JSON.stringify(buildPayload());
         const hasUnsavedChanges = currentData !== lastSavedData.current;
 
         if (hasUnsavedChanges) {
             lastSavedData.current = currentData;
-            setIsSaving(true);
-            try {
-                if (existingWordId) {
-                    await updateWordAsync({ wordId: existingWordId, data: buildPayload() });
-                } else {
-                    await createWordAsync(buildPayload());
-                }
-            } finally {
-                setIsSaving(false);
-                onClose();
+            const payload = buildPayload();
+            if (effectiveWordId) {
+                updateWordAsync({ wordId: effectiveWordId, data: payload }).catch(console.error);
+            } else {
+                createWordAsync(payload).catch(console.error);
             }
-        } else {
-            onClose();
         }
     };
 
@@ -450,15 +456,14 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         if (startY.current === null) return;
 
         e.currentTarget.releasePointerCapture(e.pointerId);
-
-        if (dragY > 150) {
-            // 閾値を超えたら閉じる
-            handleClose();
-        }
-
-        // 状態リセット
         startY.current = null;
-        setDragY(0);
+
+        if (dragY > 200) {
+            // 閾値を超えたら閉じる（dragYを維持してスナップバックを防ぐ）
+            handleClose();
+        } else {
+            setDragY(0);
+        }
     };
 
     // ドラッグ中のスタイル

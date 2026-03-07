@@ -1,3 +1,5 @@
+import { haptic } from '~/lib/haptic'
+
 interface HeaderProps {
   onLogout: () => void | Promise<void>
   currentWordSet: string
@@ -27,7 +29,10 @@ export function Header({ onLogout, currentWordSet, onOpenWordSet }: HeaderProps)
     <header className="sticky top-3 z-40 rounded-4xl border border-black/5 bg-white/50 backdrop-blur-xl px-4 py-3 flex items-center justify-between">
       <button
         type="button"
-        onClick={onOpenWordSet}
+        onClick={() => {
+          haptic('light')
+          onOpenWordSet()
+        }}
         className="h-10 px-4 rounded-full border border-black/10 bg-white/55 backdrop-blur-xl text-sm text-black/85 outline-none flex items-center gap-2"
         aria-label="単語セットを開く"
       >
@@ -37,7 +42,10 @@ export function Header({ onLogout, currentWordSet, onOpenWordSet }: HeaderProps)
         <button
           type="button"
           className="h-10 w-10 rounded-full border border-black/10 bg-white/55 backdrop-blur-xl flex items-center justify-center text-black/65"
-          onClick={onLogout}
+          onClick={() => {
+            haptic('light')
+            onLogout()
+          }}
           aria-label="ログアウト"
           title="ログアウト"
         >

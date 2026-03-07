@@ -26,4 +26,5 @@ export interface WordSet {
     name: string;
     createdAt?: string | number | Date;
     updatedAt?: string | number | Date;
+    wordCount?: number;
 }

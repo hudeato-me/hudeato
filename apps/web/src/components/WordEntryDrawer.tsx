@@ -4,6 +4,7 @@ import { useWordEntryForm } from '~/hooks/word-entry/useWordEntryForm';
 import { useWordAutoSave } from '~/hooks/word-entry/useWordAutoSave';
 import { useSwipeToClose } from '~/hooks/word-entry/useSwipeToClose';
 import { usePullToDelete } from '~/hooks/word-entry/usePullToDelete';
+import { haptic } from '~/lib/haptic';
 
 interface WordEntryDrawerProps {
     isOpen: boolean;
@@ -196,37 +197,32 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         });
     };
 
-    // 横スクロールイベントを監視してアクティブなタブを更新 & 引っ張って追加
+    // 横スクロールイベントを監視してアクティブなタブを更新
     const handleScroll = () => {
-        // scrollContainerRefが存在しない場合はスキップ
         if (!scrollContainerRef.current) return;
-        // 横スクロール位置を取得
-        const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
-        // 現在のタブを更新
+        const { scrollLeft, clientWidth } = scrollContainerRef.current;
         const index = Math.round(scrollLeft / clientWidth);
-        // 現在のタブを更新
         setActiveTab(index);
+    };
 
-        // 右へ強く引っ張られた時に引っ張りを検知して追加
-        // スクロール可能な幅 (scrollWidth) を、表示領域 + スクロール量で 110px 以上超えたら追加
-        // isOverscrollingRightがtrueの場合は、最後のタブであることが示される
-        const isOverscrollingRight = scrollLeft + clientWidth > scrollWidth + 110;
+    // 指を離した時 (touchend) のみ、追加アクションとハプティクス（振動）を発火する
+    // iOSでのHaptic制限を回避するための処置
+    const handleHorizontalTouchEnd = () => {
+        if (!scrollContainerRef.current) return;
+        const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
+        const isOverscrollingRight = scrollLeft + clientWidth > scrollWidth + 50;
 
-        // 最後のタブが表示されており、さらに「力強く」スクロールしようとしたタイミングで追加判定
         if (isOverscrollingRight && meanings.length < 5 && !isAddingMeaning) {
+            haptic('success');
             setIsAddingMeaning(true);
-
-            // 実際に追加処理を呼ぶ
             addMeaning();
 
-            // 確実に追加されたタブへスクロールさせるために少し待つ
             setTimeout(() => {
                 const newIndex = meanings.length;
                 setActiveTab(newIndex);
                 scrollToTab(newIndex);
             }, 100);
 
-            // 1秒間は連続して追加しないようロックする
             if (addMeaningTimeoutRef.current) clearTimeout(addMeaningTimeoutRef.current);
             addMeaningTimeoutRef.current = setTimeout(() => {
                 setIsAddingMeaning(false);
@@ -455,6 +451,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
                             ref={scrollContainerRef}
                             className="flex overflow-x-auto snap-x snap-mandatory no-scrollbar pb-2 pt-2 -mx-5 px-5"
                             onScroll={handleScroll}
+                            onTouchEnd={handleHorizontalTouchEnd}
                             style={{ scrollBehavior: 'smooth' }}
                         >
                             {meanings.map((item, idx) => (

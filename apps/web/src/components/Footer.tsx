@@ -1,4 +1,5 @@
 import { Link, useLocation } from '@tanstack/react-router'
+import { haptic } from '~/lib/haptic'
 import { useEffect, useRef, useState } from 'react'
 import { BsSearch, BsHouseDoor, BsListUl, BsBook, BsX, BsArrowRight } from 'react-icons/bs'
 import { useSearchWords } from '~/hooks/use-words'
@@ -194,7 +195,10 @@ export function Footer({ wordSetId }: { wordSetId?: string }) {
         <div className="flex items-center justify-center gap-2">
           <button
             type="button"
-            onClick={() => setSearchMode(true)}
+            onClick={() => {
+              haptic('light')
+              setSearchMode(true)
+            }}
             className="h-13 w-13 rounded-full border border-black/10 bg-white/55 backdrop-blur-xl flex items-center justify-center text-black/70"
             aria-label="検索"
           >
@@ -203,24 +207,29 @@ export function Footer({ wordSetId }: { wordSetId?: string }) {
           <nav className="h-13 flex-1 rounded-full border border-black/10 bg-white/55 backdrop-blur-xl px-5 flex items-center justify-between text-black/65">
             <Link
               to="/dashboard"
+              onClick={() => haptic('light')}
               className={`h-10 w-10 flex items-center justify-center transition-colors ${currentPath === '/dashboard' || !currentPath ? 'text-black' : ''}`}
             >
               <BsHouseDoor className="h-5 w-5" />
             </Link>
             <Link
               to="/list"
+              onClick={() => haptic('light')}
               className={`h-10 w-10 flex items-center justify-center transition-colors ${currentPath === '/list' ? 'text-black' : ''}`}
               aria-label="リスト"
             >
               <BsListUl className="h-5 w-5" />
             </Link>
-            <button type="button" className="h-10 w-10 flex items-center justify-center" aria-label="単語帳">
+            <button type="button" onClick={() => haptic('light')} className="h-10 w-10 flex items-center justify-center" aria-label="単語帳">
               <BsBook className="h-5 w-5" />
             </button>
           </nav>
           <button
             type="button"
-            onClick={() => setWordEntryOpen(true)}
+            onClick={() => {
+              haptic('light')
+              setWordEntryOpen(true)
+            }}
             className="h-13 w-13 rounded-full bg-black text-white flex items-center justify-center text-3xl leading-none"
             aria-label="追加"
           >

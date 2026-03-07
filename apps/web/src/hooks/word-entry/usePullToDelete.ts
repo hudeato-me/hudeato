@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { haptic } from '~/lib/haptic';
 
 interface UsePullToDeleteProps {
     effectiveWordId: string | null;
@@ -21,6 +22,7 @@ export function usePullToDelete({ effectiveWordId, onDelete }: UsePullToDeletePr
 
     // アニメーション開始 + API削除を組み合わせた削除関数
     const executeDelete = () => {
+        haptic('heavy');
         setIsDeletingAnim(true);
         onDelete();
     };
@@ -54,12 +56,9 @@ export function usePullToDelete({ effectiveWordId, onDelete }: UsePullToDeletePr
 
             setOverScroll(newOverScroll);
 
-            // 一定値以上スクロールされるとそのまま削除
-            if (newOverScroll > 350 && !isDeletingAnim) {
-                setIsPulling(false);
-                contentTouchStartY.current = null;
-                executeDelete();
-            }
+            // NOTE: 指を画面から離す前（touchmove中）にここで executeDelete() を発火してしまうと
+            // iOSではシステム制限により Haptic フィードバックがブロックされてしまうため、
+            // executeDelete は必ず touchend（指を離した時）で発火させるようにします。
         }
     };
 

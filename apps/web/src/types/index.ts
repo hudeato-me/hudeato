@@ -20,10 +20,19 @@ export interface Word {
     meaning?: string | null;
 }
 
+export interface FieldSetting {
+    key: string;
+    label: string;
+    type: 'text' | 'textarea';
+    visible: boolean;
+    order: number;
+}
+
 export interface WordSet {
     id: string;
     userId?: string;
     name: string;
+    settings?: string | null;
     createdAt?: string | number | Date;
     updatedAt?: string | number | Date;
     wordCount?: number;

@@ -10,6 +10,7 @@ interface WordSetDrawerProps {
   sets: { id: string; name: string; wordCount?: number }[]
   onClose: () => void
   onSelect: (setId: string) => void
+  onOpenSettings: (setId: string) => void
 }
 
 export function WordSetDrawer({
@@ -18,6 +19,7 @@ export function WordSetDrawer({
   sets,
   onClose,
   onSelect,
+  onOpenSettings,
 }: WordSetDrawerProps) {
   const closeThreshold = DRAWER_CLOSE_THRESHOLD
   const [dragOffsetY, setDragOffsetY] = useState(0)
@@ -292,8 +294,7 @@ export function WordSetDrawer({
                           onClick={() => {
                             haptic('light')
                             setMenuOpenId(null)
-                            setEditingId(set.id)
-                            setEditingName(set.name)
+                            onOpenSettings(set.id)
                           }}
                         >
                           編集

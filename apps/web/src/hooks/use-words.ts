@@ -324,3 +324,25 @@ export const useDeleteWordSet = () => {
 	});
 };
 
+// WordSet設定更新
+export const useUpdateWordSetSettings = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async ({ setId, settings }: { setId: string; settings: Array<{ key: string; label: string; type: 'text' | 'textarea'; visible: boolean; order: number }> }) => {
+			const res = await client.api.v1.sets[":setId"].settings.$put({
+				param: { setId },
+				json: { settings },
+			});
+			if (!res.ok) {
+				const err = await res.json() as { error?: string };
+				throw new Error(err.error ?? `API Error: ${res.status}`);
+			}
+			return res.json();
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: wordSetKeys.all });
+		},
+	});
+};
+
+

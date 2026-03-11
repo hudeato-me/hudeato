@@ -110,6 +110,7 @@ export const findWordSets = async (db: Db, userId: string) => {
 		.select({
 			id: wordSet.id,
 			name: wordSet.name,
+			settings: wordSet.settings,
 			createdAt: wordSet.createdAt,
 			updatedAt: wordSet.updatedAt,
 			wordCount: count(word.id),
@@ -172,6 +173,14 @@ export const updateWordSetName = async (db: Db, userId: string, wordSetId: strin
 	await db
 		.update(wordSet)
 		.set({ name })
+		.where(and(eq(wordSet.id, wordSetId), eq(wordSet.userId, userId)));
+};
+
+// WordSetの設定更新
+export const updateWordSetSettings = async (db: Db, userId: string, wordSetId: string, settings: string) => {
+	await db
+		.update(wordSet)
+		.set({ settings })
 		.where(and(eq(wordSet.id, wordSetId), eq(wordSet.userId, userId)));
 };
 

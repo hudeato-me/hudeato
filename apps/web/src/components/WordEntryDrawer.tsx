@@ -1,10 +1,11 @@
-import React, { useRef, useEffect } from 'react';
-import { useWord } from '~/hooks/use-words';
+import React, { useRef, useEffect, useMemo } from 'react';
+import { useWord, useWordSets } from '~/hooks/use-words';
 import { useWordEntryForm } from '~/hooks/word-entry/useWordEntryForm';
 import { useWordAutoSave } from '~/hooks/word-entry/useWordAutoSave';
 import { useSwipeToClose } from '~/hooks/word-entry/useSwipeToClose';
 import { usePullToDelete } from '~/hooks/word-entry/usePullToDelete';
 import { haptic } from '~/lib/haptic';
+import type { FieldSetting, WordSet } from '~/types';
 
 interface WordEntryDrawerProps {
     isOpen: boolean;
@@ -13,7 +14,89 @@ interface WordEntryDrawerProps {
     existingWordId?: string | null;
 }
 
+// フィールド設定マップ: key -> { label, placeholder, fieldName, type }
+const FIELD_CONFIG: Record<string, { label: string; placeholder: string; fieldName: string; type: 'text' | 'textarea' }> = {
+    meaning: { label: 'Meaning', placeholder: 'Enter meaning...', fieldName: 'meaning', type: 'textarea' },
+    partOfSpeech: { label: 'Part of Speech', placeholder: 'e.g., noun', fieldName: 'partOfSpeech', type: 'text' },
+    phonetic: { label: 'Pronunciation', placeholder: 'e.g., /word/', fieldName: 'phonetic', type: 'text' },
+    example: { label: 'Example sentence', placeholder: 'Enter example sentence...', fieldName: 'example', type: 'textarea' },
+    collocation: { label: 'Collocation', placeholder: 'Enter collocations...', fieldName: 'collocation', type: 'text' },
+    synonym: { label: 'Synonyms', placeholder: 'Enter synonyms...', fieldName: 'synonym', type: 'text' },
+    etymology: { label: 'Etymology', placeholder: 'Enter etymology...', fieldName: 'etymology', type: 'text' },
+    source: { label: 'Source / Where you learned it', placeholder: 'Enter source...', fieldName: 'source', type: 'textarea' },
+};
+
+// デフォルトのフィールド順序
+const DEFAULT_FIELD_ORDER = ['meaning', 'partOfSpeech', 'phonetic', 'example', 'collocation', 'synonym', 'etymology', 'source'];
+
+// 設定に基づいてフィールドを動的にレンダリングするコンポーネント
+function MeaningFields({
+    item,
+    idx,
+    updateMeaning,
+    fieldOrder,
+}: {
+    item: Record<string, any>;
+    idx: number;
+    updateMeaning: (index: number, field: string, value: string) => void;
+    fieldOrder: string[];
+}) {
+    const elements: React.ReactNode[] = [];
+    let i = 0;
+    while (i < fieldOrder.length) {
+        const key = fieldOrder[i];
+        const config = FIELD_CONFIG[key];
+        if (!config) { i++; continue; }
+
+        if (config.type === 'textarea') {
+            elements.push(
+                <div key={key} className="space-y-1.5">
+                    <label className="text-gray-400 text-xs ml-1">{config.label}</label>
+                    <textarea
+                        placeholder={config.placeholder}
+                        value={item[config.fieldName] ?? ''}
+                        onChange={(e) => updateMeaning(idx, config.fieldName, e.target.value)}
+                        className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3 outline-none focus:border-blue-400 transition-all min-h-[80px]"
+                    />
+                </div>
+            );
+        } else {
+            elements.push(
+                <div key={key} className="space-y-1.5">
+                    <label className="text-gray-400 text-xs ml-1">{config.label}</label>
+                    <input
+                        type="text"
+                        placeholder={config.placeholder}
+                        value={item[config.fieldName] ?? ''}
+                        onChange={(e) => updateMeaning(idx, config.fieldName, e.target.value)}
+                        className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3 outline-none focus:border-blue-400 transition-all"
+                    />
+                </div>
+            );
+        }
+        i++;
+    }
+    return <>{elements}</>;
+}
+
 export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: WordEntryDrawerProps) {
+    // ==== 単語セット設定からフィールド順序を取得 ====
+    const { data: wordSets = [] } = useWordSets(true);
+    const fieldOrder = useMemo(() => {
+        if (!wordSetId) return DEFAULT_FIELD_ORDER;
+        const currentSet = wordSets.find((s: WordSet) => s.id === wordSetId);
+        if (!currentSet?.settings) return DEFAULT_FIELD_ORDER;
+        try {
+            const parsed = JSON.parse(currentSet.settings as string) as FieldSetting[];
+            return parsed
+                .filter(f => f.visible)
+                .sort((a, b) => a.order - b.order)
+                .map(f => f.key);
+        } catch {
+            return DEFAULT_FIELD_ORDER;
+        }
+    }, [wordSetId, wordSets]);
+
     // ==== フォーム入力管理 ====
     const {
         word,
@@ -472,92 +555,12 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
                                         </div>
 
                                         <div className="space-y-4 text-sm">
-                                            <div className="space-y-1.5">
-                                                <label className="text-gray-400 text-xs ml-1">Meaning</label>
-                                                <textarea
-                                                    placeholder="Enter meaning..."
-                                                    value={item.meaning}
-                                                    onChange={(e) => updateMeaning(idx, 'meaning', e.target.value)}
-                                                    className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3 outline-none focus:border-blue-400 transition-all min-h-[80px]"
-                                                />
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="space-y-1.5">
-                                                    <label className="text-gray-400 text-xs ml-1">Part of Speech</label>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="e.g., noun"
-                                                        value={item.partOfSpeech}
-                                                        onChange={(e) => updateMeaning(idx, 'partOfSpeech', e.target.value)}
-                                                        className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3 outline-none focus:border-blue-400 transition-all"
-                                                    />
-                                                </div>
-                                                <div className="space-y-1.5">
-                                                    <label className="text-gray-400 text-xs ml-1">Pronunciation</label>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="e.g., /word/"
-                                                        value={item.phonetic}
-                                                        onChange={(e) => updateMeaning(idx, 'phonetic', e.target.value)}
-                                                        className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3 outline-none focus:border-blue-400 transition-all"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-1.5">
-                                                <label className="text-gray-400 text-xs ml-1">Example sentence</label>
-                                                <textarea
-                                                    placeholder="Enter example sentence..."
-                                                    value={item.example}
-                                                    onChange={(e) => updateMeaning(idx, 'example', e.target.value)}
-                                                    className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3 outline-none focus:border-blue-400 transition-all min-h-[80px]"
-                                                />
-                                            </div>
-
-                                            <div className="space-y-1.5">
-                                                <label className="text-gray-400 text-xs ml-1">Collocation</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Enter collocations..."
-                                                    value={item.collocation}
-                                                    onChange={(e) => updateMeaning(idx, 'collocation', e.target.value)}
-                                                    className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3 outline-none focus:border-blue-400 transition-all"
-                                                />
-                                            </div>
-
-                                            <div className="space-y-1.5">
-                                                <label className="text-gray-400 text-xs ml-1">Synonyms</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Enter synonyms..."
-                                                    value={item.synonym}
-                                                    onChange={(e) => updateMeaning(idx, 'synonym', e.target.value)}
-                                                    className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3 outline-none focus:border-blue-400 transition-all"
-                                                />
-                                            </div>
-
-                                            <div className="space-y-1.5">
-                                                <label className="text-gray-400 text-xs ml-1">Etymology</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Enter etymology..."
-                                                    value={item.etymology}
-                                                    onChange={(e) => updateMeaning(idx, 'etymology', e.target.value)}
-                                                    className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3 outline-none focus:border-blue-400 transition-all"
-                                                />
-                                            </div>
-
-                                            <div className="space-y-1.5">
-                                                <label className="text-gray-400 text-xs ml-1">Source / Where you learned it</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Enter source..."
-                                                    value={item.source}
-                                                    onChange={(e) => updateMeaning(idx, 'source', e.target.value)}
-                                                    className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3 outline-none focus:border-blue-400 transition-all"
-                                                />
-                                            </div>
+                                            <MeaningFields
+                                                item={item}
+                                                idx={idx}
+                                                updateMeaning={updateMeaning}
+                                                fieldOrder={fieldOrder}
+                                            />
                                         </div>
                                     </div>
                                 </div>

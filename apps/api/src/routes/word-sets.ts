@@ -1,22 +1,21 @@
 import { Hono } from "hono";
 import { Bindings, WordsRouteVariables } from "../types";
-import { getWordSets, createWordSet, updateWordSet, removeWordSet, updateWordSetSettingsService } from "../modules/word/service";
+import { getWordSets, createWordSet, updateWordSet, removeWordSet } from "../modules/word/service";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { handleZodError } from "../utils/error-validator";
 
-const wordSetMutationSchema = z.object({
-	name: z.string().min(1, "セット名は1文字以上必要です").max(100),
+const wordSetSettingsItemSchema = z.object({
+	key: z.string(),
+	label: z.string(),
+	type: z.enum(["text", "textarea"]),
+	visible: z.boolean(),
+	order: z.number(),
 });
 
-const wordSetSettingsSchema = z.object({
-	settings: z.array(z.object({
-		key: z.string(),
-		label: z.string(),
-		type: z.enum(["text", "textarea"]),
-		visible: z.boolean(),
-		order: z.number(),
-	})),
+const wordSetMutationSchema = z.object({
+	name: z.string().min(1, "セット名は1文字以上必要です").max(100),
+	settings: z.array(wordSetSettingsItemSchema).optional(),
 });
 
 const wordSets = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
@@ -39,31 +38,20 @@ const wordSets = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }
 			return c.json({ error: null, data: result } as const, 201);
 		}
 	)
-	// wordSet更新
+	// wordSet更新 (名前と設定)
 	.put(
 		"/:setId",
 		zValidator("param", z.object({ setId: z.string() }), handleZodError),
 		zValidator("json", wordSetMutationSchema, handleZodError),
 		async (c) => {
 			const { setId } = c.req.valid("param");
-			const { name } = c.req.valid("json");
-			await updateWordSet(c.get("db"), c.get("userId"), setId, name);
-			return c.json({ error: null, data: { success: true } } as const);
-		}
-	)
-	// wordSet設定更新
-	.put(
-		"/:setId/settings",
-		zValidator("param", z.object({ setId: z.string() }), handleZodError),
-		zValidator("json", wordSetSettingsSchema, handleZodError),
-		async (c) => {
-			const { setId } = c.req.valid("param");
-			const { settings } = c.req.valid("json");
-			await updateWordSetSettingsService(
+			const { name, settings } = c.req.valid("json");
+			await updateWordSet(
 				c.get("db"),
 				c.get("userId"),
 				setId,
-				JSON.stringify(settings),
+				name,
+				settings ? JSON.stringify(settings) : undefined
 			);
 			return c.json({ error: null, data: { success: true } } as const);
 		}

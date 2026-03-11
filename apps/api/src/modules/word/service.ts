@@ -8,7 +8,6 @@ import {
 	searchWords,
 	insertWordSet,
 	updateWordSetName,
-	updateWordSetSettings,
 	deleteWordSetById,
 	insertWord,
 	updateWordData,
@@ -153,13 +152,8 @@ export const createWordSet = async (db: Db, userId: string, name: string) => {
 };
 
 // WordSetの更新
-export const updateWordSet = async (db: Db, userId: string, wordSetId: string, name: string) => {
-	await updateWordSetName(db, userId, wordSetId, name);
-};
-
-// WordSetの設定更新
-export const updateWordSetSettingsService = async (db: Db, userId: string, wordSetId: string, settings: string) => {
-	await updateWordSetSettings(db, userId, wordSetId, settings);
+export const updateWordSet = async (db: Db, userId: string, wordSetId: string, name: string, settings?: string | null) => {
+	await updateWordSetName(db, userId, wordSetId, name, settings);
 };
 
 // WordSetの削除

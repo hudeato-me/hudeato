@@ -168,19 +168,15 @@ export const insertWordSet = async (db: Db, userId: string, id: string, name: st
 	});
 };
 
-// WordSetの名前更新
-export const updateWordSetName = async (db: Db, userId: string, wordSetId: string, name: string) => {
+// WordSetの更新 (名前と設定)
+export const updateWordSetName = async (db: Db, userId: string, wordSetId: string, name: string, settings?: string | null) => {
+	const values: any = { name };
+	if (settings !== undefined) {
+		values.settings = settings;
+	}
 	await db
 		.update(wordSet)
-		.set({ name })
-		.where(and(eq(wordSet.id, wordSetId), eq(wordSet.userId, userId)));
-};
-
-// WordSetの設定更新
-export const updateWordSetSettings = async (db: Db, userId: string, wordSetId: string, settings: string) => {
-	await db
-		.update(wordSet)
-		.set({ settings })
+		.set(values)
 		.where(and(eq(wordSet.id, wordSetId), eq(wordSet.userId, userId)));
 };
 

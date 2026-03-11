@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Reorder, useDragControls } from 'motion/react'
-import { useUpdateWordSetSettings, useUpdateWordSet } from '~/hooks/use-words'
+import { useUpdateWordSet } from '~/hooks/use-words'
 import { haptic } from '~/lib/haptic'
 import type { FieldSetting } from '~/types'
 
@@ -229,7 +229,6 @@ export function WordSetSettingsModal({
     const [showAddPicker, setShowAddPicker] = useState(false)
     const [showCloseConfirm, setShowCloseConfirm] = useState(false)
     const [isSaved, setIsSaved] = useState(false)
-    const updateSettings = useUpdateWordSetSettings()
     const updateWordSet = useUpdateWordSet()
 
     // 初期値を保持して変更検知に使う
@@ -306,7 +305,7 @@ export function WordSetSettingsModal({
     }, [])
 
     // 保存して閉じる
-    const handleDone = useCallback(async () => {
+    const handleDone = useCallback(() => {
         haptic('medium')
         const trimmedName = name.trim()
         if (!trimmedName) return
@@ -316,46 +315,33 @@ export function WordSetSettingsModal({
         const nameChanged = trimmedName !== initialNameRef.current
         const settingsChanged = JSON.stringify(allFields) !== initialFieldsJsonRef.current
 
-        try {
-            const promises: Promise<unknown>[] = []
-
-            if (nameChanged) {
-                promises.push(
-                    new Promise((resolve, reject) => {
-                        updateWordSet.mutate(
-                            { setId: wordSetId, data: { name: trimmedName } },
-                            { onSuccess: resolve, onError: reject },
-                        )
-                    })
-                )
-            }
-
-            if (settingsChanged) {
-                promises.push(
-                    new Promise((resolve, reject) => {
-                        updateSettings.mutate(
-                            { setId: wordSetId, settings: allFields },
-                            { onSuccess: resolve, onError: reject },
-                        )
-                    })
-                )
-            }
-
-            if (promises.length > 0) {
-                await Promise.all(promises)
-            }
-
-            // 保存成功 → 初期値を更新してから閉じる
-            setIsSaved(true)
-            initialNameRef.current = trimmedName
-            initialFieldsJsonRef.current = JSON.stringify(allFields)
+        if (!nameChanged && !settingsChanged) {
             onClose()
-        } catch (err) {
-            console.error('設定の保存に失敗しました', err)
-            // エラー時もとりあえず閉じる
-            onClose()
+            return
         }
-    }, [wordSetId, name, meaningField, draggableFields, updateWordSet, updateSettings, onClose])
+
+        updateWordSet.mutate(
+            {
+                setId: wordSetId,
+                data: {
+                    name: trimmedName,
+                    ...(settingsChanged ? { settings: allFields } : {})
+                }
+            },
+            {
+                onSuccess: () => {
+                    setIsSaved(true)
+                    initialNameRef.current = trimmedName
+                    initialFieldsJsonRef.current = JSON.stringify(allFields)
+                    onClose()
+                },
+                onError: (err) => {
+                    console.error('設定の保存に失敗しました', err)
+                    onClose()
+                }
+            }
+        )
+    }, [wordSetId, name, meaningField, draggableFields, updateWordSet, onClose])
 
     // ×ボタン押下
     const handleCloseAttempt = useCallback(() => {
@@ -371,7 +357,7 @@ export function WordSetSettingsModal({
     const allCurrentKeys = new Set([meaningField.key, ...draggableFields.map(f => f.key)])
     const availableFields = ALL_FIELD_OPTIONS.filter(opt => !allCurrentKeys.has(opt.key))
 
-    const isSaving = updateSettings.isPending || updateWordSet.isPending
+    const isSaving = updateWordSet.isPending
 
     return (
         <>

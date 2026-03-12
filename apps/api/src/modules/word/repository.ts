@@ -169,8 +169,8 @@ export const insertWordSet = async (db: Db, userId: string, id: string, name: st
 };
 
 // WordSetの更新 (名前と設定)
-export const updateWordSetName = async (db: Db, userId: string, wordSetId: string, name: string, settings?: string | null) => {
-	const values: any = { name };
+export const updateWordSet = async (db: Db, userId: string, wordSetId: string, name: string, settings?: string | null) => {
+	const values: { name: string; settings?: string | null } = { name };
 	if (settings !== undefined) {
 		values.settings = settings;
 	}

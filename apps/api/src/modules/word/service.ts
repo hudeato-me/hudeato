@@ -7,7 +7,7 @@ import {
 	getActivityTimestamps,
 	searchWords,
 	insertWordSet,
-	updateWordSetName,
+	updateWordSet as updateWordSetRepo,
 	deleteWordSetById,
 	insertWord,
 	updateWordData,
@@ -153,7 +153,7 @@ export const createWordSet = async (db: Db, userId: string, name: string) => {
 
 // WordSetの更新
 export const updateWordSet = async (db: Db, userId: string, wordSetId: string, name: string, settings?: string | null) => {
-	await updateWordSetName(db, userId, wordSetId, name, settings);
+	await updateWordSetRepo(db, userId, wordSetId, name, settings);
 };
 
 // WordSetの削除

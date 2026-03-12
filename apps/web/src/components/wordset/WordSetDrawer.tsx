@@ -43,6 +43,7 @@ export function WordSetDrawer({
   const deleteWordSet = useDeleteWordSet()
 
   useEffect(() => {
+    // Stateの初期化処理
     if (!open) {
       setIsDragging(false)
       setDragOffsetY(0)
@@ -59,28 +60,39 @@ export function WordSetDrawer({
     if (editingId) editInputRef.current?.focus()
   }, [editingId])
 
+  // 単語セット追加時にフォーカス
   useEffect(() => {
     if (isAdding) addInputRef.current?.focus()
   }, [isAdding])
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!open) return
+    // タッチしている指のIDを記憶
     activePointerIdRef.current = event.pointerId
+    // タッチした位置を記憶
     dragStartYRef.current = event.clientY
+    // ドラッグのStateをtrueに
     setIsDragging(true)
+    // ドラッグ開始時のオフセットを0に
     setDragOffsetY(0)
+    // 要素外でもポインターイベントを捕捉できるようにする
     event.currentTarget.setPointerCapture(event.pointerId)
   }
 
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!isDragging || activePointerIdRef.current !== event.pointerId) return
+    // どれだけドラッグしたかを計算
     const delta = Math.max(event.clientY - dragStartYRef.current, 0)
+    // ドロワーをどれだけ下にずらすかをStateに保存
     setDragOffsetY(delta)
   }
 
   const finishDrag = (shouldClose: boolean) => {
+    // ドラッグのStateをfalseに
     setIsDragging(false)
+    // ドラッグ開始時のオフセットを0に
     setDragOffsetY(0)
+    // タッチしている指のIDをnullに
     activePointerIdRef.current = null
     if (shouldClose) {
       haptic('light')
@@ -88,6 +100,7 @@ export function WordSetDrawer({
     }
   }
 
+  
   const handlePointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!isDragging || activePointerIdRef.current !== event.pointerId) return
     finishDrag(dragOffsetY > closeThreshold)

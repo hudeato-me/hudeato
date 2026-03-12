@@ -1,8 +1,8 @@
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { client } from "~/lib/api-client";
-import { InferRequestType } from "hono/client";
+import { Word, CreateWordReq, UpdateWordReq, CreateWordSetReq, UpdateWordSetReq } from "~/types";
+
 const CACHE_STALE_TIME = 5 * 60 * 1000;
-import { Word } from "~/types";
 
 // クエリキーの管理
 // 単語のクエリキー
@@ -172,39 +172,6 @@ export const useSearchWords = (wordSetId: string, q: string, enabled = true) =>
 		placeholderData: keepPreviousData,
 	});
 
-// ==============================
-// Mutations
-// ==============================
-
-type CreateWordReq = {
-	text: string;
-	locationLabel?: string | null;
-	imageKey?: string | null;
-	meanings: Array<{
-		meaning: string;
-		partOfSpeech?: string | null;
-		phonetic?: string | null;
-		example?: string | null;
-		collocation?: string | null;
-		synonym?: string | null;
-		etymology?: string | null;
-		source?: string | null;
-		slot: number;
-	}>;
-};
-type UpdateWordReq = CreateWordReq;
-type CreateWordSetReq = { name: string };
-type UpdateWordSetReq = {
-	name: string;
-	settings?: Array<{
-		key: string;
-		label: string;
-		type: 'text' | 'textarea';
-		visible: boolean;
-		order: number;
-	}>;
-};
-
 // 単語作成
 export const useCreateWord = (wordSetId: string) => {
 	const queryClient = useQueryClient();
@@ -333,4 +300,3 @@ export const useDeleteWordSet = () => {
 	});
 };
 
-// (useUpdateWordSetSettings removed)

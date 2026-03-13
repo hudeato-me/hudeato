@@ -42,7 +42,7 @@ app.use(
 	cors({
 		origin: ["http://localhost:3000", "http://localhost:5173"], // Add your client URLs
 		allowHeaders: ["Content-Type", "Authorization"],
-		allowMethods: ["POST", "GET", "OPTIONS"],
+		allowMethods: ["POST", "GET", "OPTIONS", "PUT", "DELETE", "PATCH"],
 		exposeHeaders: ["Content-Length"],
 		maxAge: 600,
 		credentials: true,

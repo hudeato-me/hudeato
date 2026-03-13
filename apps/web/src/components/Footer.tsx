@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchWords } from '~/hooks/use-words'
+import { WordEntryDrawer } from './WordEntryDrawer'
 
 function SearchIcon() {
   return (
@@ -69,6 +70,7 @@ export function Footer({ wordSetId }: { wordSetId?: string }) {
   }
 
   const [searchMode, setSearchMode] = useState(false)
+  const [isWordEntryOpen, setWordEntryOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -265,6 +267,7 @@ export function Footer({ wordSetId }: { wordSetId?: string }) {
           </nav>
           <button
             type="button"
+            onClick={() => setWordEntryOpen(true)}
             className="h-13 w-13 rounded-full bg-black text-white flex items-center justify-center text-3xl leading-none"
             aria-label="追加"
           >
@@ -272,6 +275,13 @@ export function Footer({ wordSetId }: { wordSetId?: string }) {
           </button>
         </div>
       </footer>
+
+      {/* 単語追加ドロワー */}
+      <WordEntryDrawer
+        isOpen={isWordEntryOpen}
+        onClose={() => setWordEntryOpen(false)}
+        wordSetId={wordSetId}
+      />
     </>
   )
 }

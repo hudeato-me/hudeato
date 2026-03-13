@@ -1,3 +1,6 @@
+// processが見つかりませんのエラーの解決のため追加
+/// <reference types="node" />
+
 import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({

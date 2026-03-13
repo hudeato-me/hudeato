@@ -31,11 +31,14 @@ export const logMiddleware = createMiddleware({ type: 'function' })
     const res = await ctx.next()
 
     const now = new Date()
-    console.log('Client Req/Res:', {
-      duration: now.getTime() - res.context.clientTime.getTime(),
-      durationToServer: res.context.durationToServer,
-      durationFromServer: now.getTime() - res.context.serverTime.getTime(),
-    })
+    // 開発中だけログを出す
+    if (import.meta.env.DEV) {
+      console.log('Client Req/Res:', {
+        duration: now.getTime() - res.context.clientTime.getTime(),
+        durationToServer: res.context.durationToServer,
+        durationFromServer: now.getTime() - res.context.serverTime.getTime(),
+      })
+    }
 
     return res
   })

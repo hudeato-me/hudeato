@@ -11,3 +11,6 @@ local.db-shm
 
 # wrangler
 .wrangler
+
+# github
+.github

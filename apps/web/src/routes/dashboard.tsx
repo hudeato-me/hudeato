@@ -1,114 +1,95 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { createFileRoute, redirect } from '@tanstack/react-router'
+import { useState } from 'react'
+// components
 import { Activity } from '~/components/dashboard/Activity'
 import { Footer } from '~/components/Footer'
 import { Header } from '~/components/Header'
 import { RecentWordItem } from '~/components/dashboard/RecentWordItem'
 import { StatCard } from '~/components/dashboard/StatCard'
 import { WordSetDrawer } from '~/components/wordset/WordSetDrawer'
+// authentication client
 import { authClient } from '~/lib/auth-client'
+// query client
+import { useQueryClient } from '@tanstack/react-query'
+// custom hooks
+import { useDashboard, useWordSets } from '~/hooks/use-words'
+import type { WordSet } from '~/types'
+
+type Session = typeof authClient.$Infer.Session
 
 export const Route = createFileRoute('/dashboard')({
+  // キャッシュを生かすため、サーバーサイドレンダリングは行わない
+  ssr: false,
+  // コンポーネントが描画される前の処理
+  beforeLoad: async () => {
+    // エラーが起きた場合はnullを返すようにフォールバック
+    const result = await authClient.getSession().catch(() => null)
+
+    // 画面読み込み時にuserがいなかったりエラーが起きれば、ログインページに遷移→ダッシュボード画面をそもそも表示させない
+    if (!result?.data?.user) {
+      throw redirect({ to: '/login' })
+    }
+
+    // user情報をcontextとしてComponent側に渡す
+    return { session: result.data as Session }
+  },
+  // beforeLoadの待機中に表示されるローディングUI
+  pendingComponent: () => (
+    <div className="min-h-screen flex items-center justify-center text-black/30 text-[0.95rem]">
+      読み込み中...
+    </div>
+  ),
   component: DashboardPage,
 })
 
-interface UserSession {
-  user: {
-    id: string
-    name: string
-    email: string
-    createdAt: string | Date
-    image?: string | null
-  }
-}
-
 function DashboardPage() {
-  const navigate = useNavigate()
-  const [session, setSession] = useState<UserSession | null>(null)
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  // beforeLoadからsession情報を受け取る
+  const { session } = Route.useRouteContext()
+  // ドロワーの開閉状態
   const [isWordSetDrawerOpen, setIsWordSetDrawerOpen] = useState(false)
-  const [selectedWordSet, setSelectedWordSet] = useState('英単語用')
 
-  useEffect(() => {
-    const fetchSession = async () => {
-      try {
-        const result = await authClient.getSession()
-        // userがいなかったらログインページに遷移
-        if (!result.data?.user) {
-          navigate({ to: '/login' })
-          return
-        }
-        // user情報をsessionにセット
-        setSession(result.data as UserSession)
-      } catch {
-        // エラーが起きれば、ログインページへ
-        navigate({ to: '/login' })
-      } finally {
-        // ローディングを非表示に。
-        setLoading(false)
-      }
-    }
-    fetchSession()
-  }, [navigate])
+  // wordSet一覧の取得（beforeLoadを通っている時点でsessionは確実にあるため true固定）
+  const { data: wordSets = [] } = useWordSets(true)
 
-  const handleLogout = async () => {
-    await authClient.signOut()
-    navigate({ to: '/' })
-  }
+  // 選択中のwordSetIdのstateの管理
+  const [selectedIdState, setSelectedIdState] = useState<string | null>(null)
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-black/30 text-[0.95rem]">
-        読み込み中...
-      </div>
-    )
-  }
+  // 実際に使用するID→最初のロード時は、selectedIdStateがnullなので、wordSets[0]?.id（つまり一番上のセット）が選ばれる
+  const selectedWordSetId = selectedIdState ?? wordSets[0]?.id ?? null
 
-  if (!session) {
-    return null
-  }
+  const {
+    data: dashboardData,
+    isLoading: isDashboardLoading,
+    isError: isWordsError,
+  } = useDashboard(selectedWordSetId ?? '', !!selectedWordSetId)
 
-  const user = session.user
-  const createdDate = new Date(user.createdAt).toLocaleDateString('ja-JP', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+  // wordSetが0件の場合はローディングを打ち切る
+  const isWordsLoading = isDashboardLoading && wordSets.length > 0
 
   const stats = {
-    words: 142,
-    mastered: 85,
-    streak: 21,
+    words: dashboardData?.totalWords ?? 0,
+    mastered: dashboardData?.masteredWords ?? 0,
+    streak: dashboardData?.streak ?? 0,
   }
 
-  const recentWords = [
-    {
-      word: 'ephemeral',
-      meaning: '一時的な、はかない',
-    },
-    {
-      word: 'meticulous',
-      meaning: '几帳面な、綿密な',
-    },
-    {
-      word: 'resilient',
-      meaning: '回復力のある、しなやかな',
-    },
-    {
-      word: 'lucid',
-      meaning: '明快な、分かりやすい',
-    },
-  ]
+  const recentWords = dashboardData?.recentWords ?? []
 
-  const wordSets = ['英単語用', '言葉集め用', '専門用語', 'ビジネス用語']
+  const selectedWordSetName = wordSets.find((s: WordSet) => s.id === selectedWordSetId)?.name ?? ''
 
   return (
     <div className="min-h-screen bg-white text-black/80">
       <main className="max-w-[430px] mx-auto px-4 pt-5 pb-30 space-y-5">
         <Header
-          onLogout={handleLogout}
-          currentWordSet={selectedWordSet}
+          currentWordSet={selectedWordSetName}
           onOpenWordSet={() => setIsWordSetDrawerOpen(true)}
+          onLogout={async () => {
+            await authClient.signOut();
+            queryClient.clear();
+            // IndexedDBキャッシュも明示的に消去
+            const { del } = await import('idb-keyval');
+            await del('REACT_QUERY_OFFLINE_CACHE'); // PersistQueryClientProviderのkeyと合わせる
+          }}
         />
 
         <section className="grid grid-cols-3 gap-3">
@@ -117,22 +98,36 @@ function DashboardPage() {
           <StatCard label="Streak" value={stats.streak} cardClass="bg-black/6" />
         </section>
 
-        <Activity />
+        <Activity timestamps={dashboardData?.activityTimestamps ?? []} />
 
         <section className="space-y-3">
           <div className="text-[1rem] leading-none text-black/60 px-1">Recent Words</div>
-          {recentWords.map((item) => (
-            <RecentWordItem key={`${item.word}-${item.meaning}`} word={item.word} meaning={item.meaning} />
-          ))}
+          {wordSets.length === 0 ? (
+            <div className="text-sm text-black/45 px-1">単語セットを追加してください</div>
+          ) : isWordsLoading ? (
+            <div className="text-sm text-black/45 px-1">読み込み中...</div>
+          ) : isWordsError ? (
+            <div className="text-sm text-black/45 px-1">データ取得に失敗しました</div>
+          ) : recentWords.length === 0 ? (
+            <div className="text-sm text-black/45 px-1">まだ単語がありません</div>
+          ) : (
+            recentWords.map((item) => (
+              <RecentWordItem
+                key={item.id}
+                word={item.text}
+                meaning={item.meaning ?? '意味未登録'}
+              />
+            ))
+          )}
         </section>
       </main>
 
       <WordSetDrawer
         open={isWordSetDrawerOpen}
-        selectedSet={selectedWordSet}
+        selectedSetId={selectedWordSetId ?? ''}
         sets={wordSets}
         onClose={() => setIsWordSetDrawerOpen(false)}
-        onSelect={setSelectedWordSet}
+        onSelect={setSelectedIdState}
       />
 
       <Footer />

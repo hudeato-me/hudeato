@@ -5,6 +5,7 @@ import {
 	findWordSets,
 	findWordsBySet,
 	getActivityTimestamps,
+	searchWords,
 } from "./repository";
 
 import { Db } from "../../types/words-route-type";
@@ -69,4 +70,18 @@ export const getWordSets = async (
 ) => {
 	const wordSets = await findWordSets(db, userId);
 	return wordSets;
+};
+
+// 単語を検索する
+export const searchWordList = async (
+	db: Db,
+	userId: string,
+	wordSetId: string,
+	query: string,
+	limit?: number,
+) => {
+	if (!query.trim()) return [];
+
+	const results = await searchWords(db, userId, wordSetId, query, limit);
+	return results;
 };

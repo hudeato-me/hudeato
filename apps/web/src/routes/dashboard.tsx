@@ -129,8 +129,8 @@ function DashboardPage() {
         onClose={() => setIsWordSetDrawerOpen(false)}
         onSelect={setSelectedIdState}
       />
-
-      <Footer />
+      {/* wordSetが選択されている時だけFooterを表示 */}
+      {selectedWordSetId && <Footer wordSetId={selectedWordSetId} />}
     </div>
   )
 }

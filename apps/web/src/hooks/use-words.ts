@@ -148,7 +148,7 @@ export const useWordSets = (enabled = true) =>
 			}
 			return res.json();
 		},
-		staleTime: 1000 * 60 * 60, // 1時間キャッシュ (永続化環境で一生更新されないのを防ぐ)
+		staleTime: 1000 * 60 * 5, // 5分キャッシュ
 		enabled,
 	});
 
@@ -214,6 +214,7 @@ export const useCreateWord = (wordSetId: string) => {
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: wordKeys.bySet(wordSetId) });
 			queryClient.invalidateQueries({ queryKey: wordKeys.dashboard(wordSetId) });
+			queryClient.invalidateQueries({ queryKey: wordSetKeys.all });
 		},
 	});
 };
@@ -237,6 +238,7 @@ export const useUpdateWord = (wordSetId: string) => {
 			queryClient.invalidateQueries({ queryKey: wordKeys.single(wordId) });
 			queryClient.invalidateQueries({ queryKey: wordKeys.bySet(wordSetId) });
 			queryClient.invalidateQueries({ queryKey: wordKeys.dashboard(wordSetId) });
+			queryClient.invalidateQueries({ queryKey: wordSetKeys.all });
 		},
 	});
 };
@@ -258,6 +260,7 @@ export const useDeleteWord = (wordSetId: string) => {
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: wordKeys.bySet(wordSetId) });
 			queryClient.invalidateQueries({ queryKey: wordKeys.dashboard(wordSetId) });
+			queryClient.invalidateQueries({ queryKey: wordSetKeys.all });
 		},
 	});
 };

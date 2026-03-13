@@ -106,16 +106,19 @@ export const getActivityTimestamps = async (db: Db, userId: string) => {
 
 // ユーザーのwordSet一覧を取得
 export const findWordSets = async (db: Db, userId: string) => {
-	return db.query.wordSet.findMany({
-		where: eq(wordSet.userId, userId),
-		orderBy: [desc(wordSet.createdAt)],
-		columns: {
-			id: true,
-			name: true,
-			createdAt: true,
-			updatedAt: true,
-		},
-	});
+	return db
+		.select({
+			id: wordSet.id,
+			name: wordSet.name,
+			createdAt: wordSet.createdAt,
+			updatedAt: wordSet.updatedAt,
+			wordCount: count(word.id),
+		})
+		.from(wordSet)
+		.leftJoin(word, eq(wordSet.id, word.wordSetId))
+		.where(eq(wordSet.userId, userId))
+		.groupBy(wordSet.id)
+		.orderBy(desc(wordSet.createdAt));
 };
 
 // 単語の検索（リアルタイム検索用）

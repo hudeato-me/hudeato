@@ -40,7 +40,16 @@ const protectedMiddleware = createMiddleware<{
 app.use(
 	"*",
 	cors({
-		origin: ["http://localhost:3000", "http://localhost:5173"], // Add your client URLs
+		origin: (origin) => {
+			if (
+				!origin ||
+				origin.startsWith("http://localhost:") ||
+				origin.startsWith("http://192.168.")
+			) {
+				return origin;
+			}
+			return "http://localhost:3000";
+		},
 		allowHeaders: ["Content-Type", "Authorization"],
 		allowMethods: ["POST", "GET", "OPTIONS", "PUT", "DELETE", "PATCH"],
 		exposeHeaders: ["Content-Length"],

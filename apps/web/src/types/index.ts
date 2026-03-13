@@ -1,3 +1,7 @@
+import { authClient } from '~/lib/auth-client'
+
+export type Session = typeof authClient.$Infer.Session
+
 export interface Word {
     id: string;
     userId?: string;
@@ -22,4 +26,5 @@ export interface WordSet {
     name: string;
     createdAt?: string | number | Date;
     updatedAt?: string | number | Date;
+    wordCount?: number;
 }

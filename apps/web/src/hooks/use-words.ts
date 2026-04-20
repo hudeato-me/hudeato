@@ -1,5 +1,6 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { client } from "~/lib/api-client";
+import { InferRequestType } from "hono/client";
 const CACHE_STALE_TIME = 5 * 60 * 1000;
 import { Word } from "~/types";
 
@@ -10,6 +11,7 @@ export const wordKeys = {
 	bySet: (wordSetId: string) => ["words", "set", wordSetId] as const,
 	single: (wordId: string) => ["words", wordId] as const,
 	dashboard: (wordSetId: string) => ["dashboard", wordSetId] as const,
+	search: (wordSetId: string, q: string) => ["words", "search", wordSetId, q] as const,
 };
 // 単語セットのクエリキー
 export const wordSetKeys = {
@@ -146,6 +148,179 @@ export const useWordSets = (enabled = true) =>
 			}
 			return res.json();
 		},
-		staleTime: 1000 * 60 * 60, // 1時間キャッシュ (永続化環境で一生更新されないのを防ぐ)
+		staleTime: 1000 * 60 * 5, // 5分キャッシュ
 		enabled,
 	});
+
+// 単語の検索
+export const useSearchWords = (wordSetId: string, q: string, enabled = true) =>
+	useQuery({
+		queryKey: wordKeys.search(wordSetId, q),
+		queryFn: async () => {
+			const res = await client.api.v1.sets[":setId"].words.search.$get({
+				param: { setId: wordSetId },
+				query: { q },
+			});
+			if (!res.ok) {
+				const err = await res.json() as { error?: string };
+				throw new Error(err.error ?? `API Error: ${res.status}`);
+			}
+			return res.json();
+		},
+		enabled: enabled && !!wordSetId && !!q.trim(),
+		staleTime: CACHE_STALE_TIME,
+		placeholderData: keepPreviousData,
+	});
+
+// ==============================
+// Mutations
+// ==============================
+
+type CreateWordReq = {
+	text: string;
+	locationLabel?: string | null;
+	imageKey?: string | null;
+	meanings: Array<{
+		meaning: string;
+		partOfSpeech?: string | null;
+		phonetic?: string | null;
+		example?: string | null;
+		collocation?: string | null;
+		synonym?: string | null;
+		etymology?: string | null;
+		source?: string | null;
+		slot: number;
+	}>;
+};
+type UpdateWordReq = CreateWordReq;
+type CreateWordSetReq = { name: string };
+type UpdateWordSetReq = { name: string };
+
+// 単語作成
+export const useCreateWord = (wordSetId: string) => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async (data: CreateWordReq) => {
+			const res = await client.api.v1.sets[":setId"].words.$post({
+				param: { setId: wordSetId },
+				json: data,
+			});
+			if (!res.ok) {
+				const err = await res.json() as { error?: string };
+				throw new Error(err.error ?? `API Error: ${res.status}`);
+			}
+			return res.json();
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: wordKeys.bySet(wordSetId) });
+			queryClient.invalidateQueries({ queryKey: wordKeys.dashboard(wordSetId) });
+			queryClient.invalidateQueries({ queryKey: wordSetKeys.all });
+		},
+	});
+};
+
+// 単語更新
+export const useUpdateWord = (wordSetId: string) => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async ({ wordId, data }: { wordId: string; data: UpdateWordReq }) => {
+			const res = await client.api.v1.sets[":setId"].words[":wordId"].$put({
+				param: { setId: wordSetId, wordId },
+				json: data,
+			});
+			if (!res.ok) {
+				const err = await res.json() as { error?: string };
+				throw new Error(err.error ?? `API Error: ${res.status}`);
+			}
+			return res.json();
+		},
+		onSuccess: (_, { wordId }) => {
+			queryClient.invalidateQueries({ queryKey: wordKeys.single(wordId) });
+			queryClient.invalidateQueries({ queryKey: wordKeys.bySet(wordSetId) });
+			queryClient.invalidateQueries({ queryKey: wordKeys.dashboard(wordSetId) });
+			queryClient.invalidateQueries({ queryKey: wordSetKeys.all });
+		},
+	});
+};
+
+// 単語削除
+export const useDeleteWord = (wordSetId: string) => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async (wordId: string) => {
+			const res = await client.api.v1.sets[":setId"].words[":wordId"].$delete({
+				param: { setId: wordSetId, wordId },
+			});
+			if (!res.ok) {
+				const err = await res.json() as { error?: string };
+				throw new Error(err.error ?? `API Error: ${res.status}`);
+			}
+			return res.json();
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: wordKeys.bySet(wordSetId) });
+			queryClient.invalidateQueries({ queryKey: wordKeys.dashboard(wordSetId) });
+			queryClient.invalidateQueries({ queryKey: wordSetKeys.all });
+		},
+	});
+};
+
+// WordSet作成
+export const useCreateWordSet = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async (data: CreateWordSetReq) => {
+			const res = await client.api.v1.sets.$post({ json: data });
+			if (!res.ok) {
+				const err = await res.json() as { error?: string };
+				throw new Error(err.error ?? `API Error: ${res.status}`);
+			}
+			return res.json();
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: wordSetKeys.all });
+		},
+	});
+};
+
+// WordSet更新
+export const useUpdateWordSet = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async ({ setId, data }: { setId: string; data: UpdateWordSetReq }) => {
+			const res = await client.api.v1.sets[":setId"].$put({
+				param: { setId },
+				json: data,
+			});
+			if (!res.ok) {
+				const err = await res.json() as { error?: string };
+				throw new Error(err.error ?? `API Error: ${res.status}`);
+			}
+			return res.json();
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: wordSetKeys.all });
+		},
+	});
+};
+
+// WordSet削除
+export const useDeleteWordSet = () => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async (setId: string) => {
+			const res = await client.api.v1.sets[":setId"].$delete({
+				param: { setId },
+			});
+			if (!res.ok) {
+				const err = await res.json() as { error?: string };
+				throw new Error(err.error ?? `API Error: ${res.status}`);
+			}
+			return res.json();
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: wordSetKeys.all });
+		},
+	});
+};
+

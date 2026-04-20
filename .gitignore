@@ -14,3 +14,9 @@ local.db-shm
 
 # github
 .github
+
+# agent
+.agent
+
+# claude
+.claude

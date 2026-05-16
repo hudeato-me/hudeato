@@ -37,6 +37,13 @@ export const betterAuthConfig = (
 		},
 		plugins: [openAPI()],
 		baseURL: betterAuthBaseUrl,
-		trustedOrigins: ["http://localhost:3000", "http://localhost:5173", "http://192.168.10.103:3000"],
+		trustedOrigins: (request) => {
+			const origin = request?.headers.get("origin")
+			if (!origin) return []
+			// localhost / 127.0.0.1 / RFC1918 private IPs を任意ポートで許可（開発用）
+			const devOriginPattern = /^http:\/\/(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}):\d+$/
+			if (devOriginPattern.test(origin)) return [origin]
+			return []
+		},
 	})
 }

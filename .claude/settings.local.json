@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(pnpm --filter web add motion)",
-      "Bash(pnpm add motion)"
-    ]
-  }
-}

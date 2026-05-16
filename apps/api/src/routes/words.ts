@@ -3,6 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { Bindings, WordsRouteVariables } from "../types";
 import { getWordById, getWords, searchWordList, createWord, updateWord, removeWord } from "../modules/word/service";
+import { deleteImage } from "../modules/upload/service";
 import { handleZodError } from "../utils/error-validator";
 
 // 単語の意味 (WordMeaning) スキーマ
@@ -100,7 +101,19 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 		zValidator("param", z.object({ setId: z.string(), wordId: z.string() }), handleZodError),
 		async (c) => {
 			const { setId, wordId } = c.req.valid("param");
-			await removeWord(c.get("db"), c.get("userId"), setId, wordId);
+			const db = c.get("db");
+			const userId = c.get("userId");
+
+			const target = await getWordById(db, userId, setId, wordId);
+
+			await removeWord(db, userId, setId, wordId);
+
+			if (target?.imageKey) {
+				deleteImage(c.env.IMAGES_BUCKET, target.imageKey).catch((err) =>
+					console.error("Failed to delete image from R2", target.imageKey, err),
+				);
+			}
+
 			return c.json({ error: null, data: { success: true } } as const);
 		}
 	);

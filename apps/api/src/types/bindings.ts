@@ -1,3 +1,5 @@
+import type { R2Bucket } from "@cloudflare/workers-types";
+
 export type Bindings = {
 	TURSO_DATABASE_URL: string;
 	TURSO_AUTH_TOKEN: string;

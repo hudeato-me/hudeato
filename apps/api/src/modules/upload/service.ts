@@ -1,3 +1,4 @@
+import type { R2Bucket } from "@cloudflare/workers-types";
 import { deleteObject, getObject, putObject } from "./repository";
 
 const MAX_SIZE_BYTES = 5 * 1024 * 1024;

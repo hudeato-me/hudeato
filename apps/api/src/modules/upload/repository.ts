@@ -1,3 +1,5 @@
+import type { R2Bucket } from "@cloudflare/workers-types";
+
 // R2への純粋なアクセス層 (DBレイヤと同じ立ち位置)
 
 export const putObject = async (

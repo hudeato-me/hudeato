@@ -47,7 +47,8 @@ const upload = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>(
 			return c.json({ error: "Not Found", data: null } as const, 404);
 		}
 
-		return new Response(obj.body, {
+		// workers-typesとDOMのReadableStream型衝突を回避するためのcast (実体は同じ)
+		return new Response(obj.body as unknown as ReadableStream, {
 			headers: {
 				"Content-Type": obj.httpMetadata?.contentType ?? "application/octet-stream",
 				"Cache-Control": "private, max-age=300",

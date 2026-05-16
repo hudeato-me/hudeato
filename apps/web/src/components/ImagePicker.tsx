@@ -126,22 +126,21 @@ export function ImagePicker({ imageKey, onChange }: ImagePickerProps) {
 					aria-modal="true"
 				>
 					{/* 上部ツールバー */}
-					<div className="grid grid-cols-3 items-center px-4 pt-[max(env(safe-area-inset-top),1rem)] pb-2">
+					<div className="flex items-center justify-between px-4 pt-[max(env(safe-area-inset-top),1rem)] pb-2">
 						<button
 							type="button"
 							onClick={closeLightbox}
-							className="w-10 h-10 flex items-center justify-start text-white active:scale-95 transition-transform"
+							className="w-10 h-10 flex items-center justify-center text-white active:scale-95 transition-transform"
 							aria-label="閉じる"
 						>
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6">
 								<path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
 							</svg>
 						</button>
-						<div className="text-white text-sm text-center select-none">1/1</div>
 						<button
 							type="button"
 							onClick={handleDelete}
-							className="w-10 h-10 flex items-center justify-end text-white active:scale-95 transition-transform ml-auto"
+							className="w-10 h-10 flex items-center justify-center text-white active:scale-95 transition-transform"
 							aria-label="削除"
 						>
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6">

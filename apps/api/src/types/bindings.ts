@@ -4,4 +4,5 @@ export type Bindings = {
 	POLAR_ACCESS_TOKEN: string;
 	UPSTASH_REDIS_REST_URL: string;
 	UPSTASH_REDIS_REST_TOKEN: string;
+	IMAGES_BUCKET: R2Bucket;
 };

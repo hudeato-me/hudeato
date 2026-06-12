@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useCreateWordSet, useUpdateWordSet, useDeleteWordSet } from '~/hooks/use-words'
+import { haptic } from '~/lib/haptic'
 
 const DRAWER_CLOSE_THRESHOLD = 72;
 
@@ -9,6 +10,7 @@ interface WordSetDrawerProps {
   sets: { id: string; name: string; wordCount?: number }[]
   onClose: () => void
   onSelect: (setId: string) => void
+  onOpenSettings: (setId: string) => void
 }
 
 export function WordSetDrawer({
@@ -17,6 +19,7 @@ export function WordSetDrawer({
   sets,
   onClose,
   onSelect,
+  onOpenSettings,
 }: WordSetDrawerProps) {
   const closeThreshold = DRAWER_CLOSE_THRESHOLD
   const [dragOffsetY, setDragOffsetY] = useState(0)
@@ -40,6 +43,7 @@ export function WordSetDrawer({
   const deleteWordSet = useDeleteWordSet()
 
   useEffect(() => {
+    // Stateの初期化処理
     if (!open) {
       setIsDragging(false)
       setDragOffsetY(0)
@@ -56,32 +60,47 @@ export function WordSetDrawer({
     if (editingId) editInputRef.current?.focus()
   }, [editingId])
 
+  // 単語セット追加時にフォーカス
   useEffect(() => {
     if (isAdding) addInputRef.current?.focus()
   }, [isAdding])
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!open) return
+    // タッチしている指のIDを記憶
     activePointerIdRef.current = event.pointerId
+    // タッチした位置を記憶
     dragStartYRef.current = event.clientY
+    // ドラッグのStateをtrueに
     setIsDragging(true)
+    // ドラッグ開始時のオフセットを0に
     setDragOffsetY(0)
+    // 要素外でもポインターイベントを捕捉できるようにする
     event.currentTarget.setPointerCapture(event.pointerId)
   }
 
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!isDragging || activePointerIdRef.current !== event.pointerId) return
+    // どれだけドラッグしたかを計算
     const delta = Math.max(event.clientY - dragStartYRef.current, 0)
+    // ドロワーをどれだけ下にずらすかをStateに保存
     setDragOffsetY(delta)
   }
 
   const finishDrag = (shouldClose: boolean) => {
+    // ドラッグのStateをfalseに
     setIsDragging(false)
+    // ドラッグ開始時のオフセットを0に
     setDragOffsetY(0)
+    // タッチしている指のIDをnullに
     activePointerIdRef.current = null
-    if (shouldClose) onClose()
+    if (shouldClose) {
+      haptic('light')
+      onClose()
+    }
   }
 
+  
   const handlePointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!isDragging || activePointerIdRef.current !== event.pointerId) return
     finishDrag(dragOffsetY > closeThreshold)
@@ -108,6 +127,7 @@ export function WordSetDrawer({
     }
     createWordSet.mutate({ name: trimmed }, {
       onSuccess: () => {
+        haptic('success')
         setIsAdding(false)
         setNewName('')
       },
@@ -128,6 +148,7 @@ export function WordSetDrawer({
   const handleDelete = (setId: string) => {
     deleteWordSet.mutate(setId, {
       onSuccess: () => {
+        haptic('error')
         setDeletingId(null)
         // 削除されたのが選択中のセットなら、最初のセットを選択
         if (setId === selectedSetId) {
@@ -147,6 +168,7 @@ export function WordSetDrawer({
         type="button"
         className="absolute inset-0 bg-black/22"
         onClick={() => {
+          haptic('light')
           resetStates()
           onClose()
         }}
@@ -190,14 +212,20 @@ export function WordSetDrawer({
                         <button
                           type="button"
                           className="px-3 py-1.5 text-xs rounded-lg bg-red-500 text-white active:scale-95 transition-transform"
-                          onClick={() => handleDelete(set.id)}
+                          onClick={() => {
+                            haptic('heavy')
+                            handleDelete(set.id)
+                          }}
                         >
                           削除
                         </button>
                         <button
                           type="button"
                           className="px-3 py-1.5 text-xs rounded-lg bg-black/5 text-black/60 active:scale-95 transition-transform"
-                          onClick={() => setDeletingId(null)}
+                          onClick={() => {
+                            haptic('light')
+                            setDeletingId(null)
+                          }}
                         >
                           取消
                         </button>
@@ -237,6 +265,7 @@ export function WordSetDrawer({
                       type="button"
                       className="flex-1 h-full flex items-center text-left gap-2"
                       onClick={() => {
+                        haptic('medium')
                         resetStates()
                         onSelect(set.id)
                         onClose()
@@ -250,6 +279,7 @@ export function WordSetDrawer({
                       className="w-10 h-10 flex items-center justify-center rounded-lg text-black/40 hover:bg-black/5 active:scale-95 transition-all"
                       onClick={(e) => {
                         e.stopPropagation()
+                        haptic('light')
                         setMenuOpenId(menuOpenId === set.id ? null : set.id)
                       }}
                       aria-label="メニューを開く"
@@ -264,7 +294,10 @@ export function WordSetDrawer({
                       <button
                         type="button"
                         className="fixed inset-0 z-[71]"
-                        onClick={() => setMenuOpenId(null)}
+                        onClick={() => {
+                          haptic('light')
+                          setMenuOpenId(null)
+                        }}
                         aria-label="メニューを閉じる"
                       />
                       <div className="absolute right-2 top-12 z-[72] bg-white rounded-xl shadow-lg border border-black/8 py-1 min-w-[120px]">
@@ -272,9 +305,9 @@ export function WordSetDrawer({
                           type="button"
                           className="w-full px-4 py-2.5 text-left text-sm text-black/70 hover:bg-black/5 transition-colors"
                           onClick={() => {
+                            haptic('light')
                             setMenuOpenId(null)
-                            setEditingId(set.id)
-                            setEditingName(set.name)
+                            onOpenSettings(set.id)
                           }}
                         >
                           編集
@@ -283,6 +316,7 @@ export function WordSetDrawer({
                           type="button"
                           className="w-full px-4 py-2.5 text-left text-sm text-red-500 hover:bg-red-50 transition-colors"
                           onClick={() => {
+                            haptic('heavy')
                             setMenuOpenId(null)
                             setDeletingId(set.id)
                           }}
@@ -321,7 +355,10 @@ export function WordSetDrawer({
             <button
               type="button"
               className="mt-6 w-full h-14 rounded-xl border border-dashed border-black/20 text-black/55 text-sm active:scale-[0.98] transition-transform"
-              onClick={() => setIsAdding(true)}
+              onClick={() => {
+                haptic('light')
+                setIsAdding(true)
+              }}
             >
               ＋ 新しいセットを追加
             </button>

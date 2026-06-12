@@ -110,6 +110,7 @@ export const findWordSets = async (db: Db, userId: string) => {
 		.select({
 			id: wordSet.id,
 			name: wordSet.name,
+			settings: wordSet.settings,
 			createdAt: wordSet.createdAt,
 			updatedAt: wordSet.updatedAt,
 			wordCount: count(word.id),
@@ -167,11 +168,15 @@ export const insertWordSet = async (db: Db, userId: string, id: string, name: st
 	});
 };
 
-// WordSetの名前更新
-export const updateWordSetName = async (db: Db, userId: string, wordSetId: string, name: string) => {
+// WordSetの更新 (名前と設定)
+export const updateWordSet = async (db: Db, userId: string, wordSetId: string, name: string, settings?: string | null) => {
+	const values: { name: string; settings?: string | null } = { name };
+	if (settings !== undefined) {
+		values.settings = settings;
+	}
 	await db
 		.update(wordSet)
-		.set({ name })
+		.set(values)
 		.where(and(eq(wordSet.id, wordSetId), eq(wordSet.userId, userId)));
 };
 

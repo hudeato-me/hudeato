@@ -18,5 +18,8 @@ local.db-shm
 # agent
 .agent
 
+# turbo
+.turbo
+
 # claude
 .claude

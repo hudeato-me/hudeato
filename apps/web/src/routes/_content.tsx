@@ -4,6 +4,7 @@ import { Header } from '~/components/Header'
 import { Footer } from '~/components/Footer'
 import { AnimatedOutlet } from '~/components/AnimatedOutlet'
 import { WordSetDrawer } from '~/components/wordset/WordSetDrawer'
+import { WordSetSettingsModal } from '~/components/wordset/WordSetSettingsModal'
 import { authClient } from '~/lib/auth-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { useWordSets } from '~/hooks/use-words'
@@ -32,9 +33,11 @@ function ContentLayout() {
     const queryClient = useQueryClient()
     const [isWordSetDrawerOpen, setIsWordSetDrawerOpen] = useState(false)
     const [selectedIdState, setSelectedIdState] = useState<string | null>(null)
+    const [settingsSetId, setSettingsSetId] = useState<string | null>(null)
     const { data: wordSets = [] } = useWordSets(true)
     const selectedWordSetId = selectedIdState ?? wordSets[0]?.id ?? null
     const selectedWordSetName = wordSets.find((s: WordSet) => s.id === selectedWordSetId)?.name ?? ''
+    const settingsWordSet = wordSets.find((s: WordSet) => s.id === settingsSetId)
 
 
     return (
@@ -60,6 +63,17 @@ function ContentLayout() {
                     sets={wordSets}
                     onClose={() => setIsWordSetDrawerOpen(false)}
                     onSelect={setSelectedIdState}
+                    onOpenSettings={(setId) => {
+                        setIsWordSetDrawerOpen(false)
+                        setSettingsSetId(setId)
+                    }}
+                />
+                <WordSetSettingsModal
+                    open={!!settingsSetId}
+                    wordSetId={settingsSetId ?? ''}
+                    wordSetName={settingsWordSet?.name ?? ''}
+                    currentSettings={settingsWordSet?.settings ?? null}
+                    onClose={() => setSettingsSetId(null)}
                 />
                 {selectedWordSetId && <Footer wordSetId={selectedWordSetId} />}
             </div>

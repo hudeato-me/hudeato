@@ -48,6 +48,8 @@ export const account = sqliteTable(
   (table) => [index("account_userId_idx").on(table.userId)],
 );
 
+
+
 export const verification = sqliteTable(
   "verification",
   {
@@ -76,3 +78,5 @@ export const accountRelations = relations(account, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+

@@ -5,6 +5,7 @@ import { FilterTabs } from '~/components/FilterTabs'
 import { WordEntryDrawer } from '~/components/WordEntryDrawer'
 import { useWords } from '~/hooks/use-words'
 import { useContentContext } from '~/lib/content-context'
+import { haptic } from '~/lib/haptic'
 import type { Word } from '~/types'
 
 export const Route = createFileRoute('/_content/list')({
@@ -33,7 +34,7 @@ function WordsPage() {
             if (filterType === 'mastered' && !word.isMastered) return false
             // unmasterdだったら習得済みの単語を除外
             if (filterType === 'unmastered' && word.isMastered) return false
-            
+
             // 検索欄に文字が入っていたら
             if (normalizedQuery) {
                 // 単語、意味、複数の意味を小文字に変換
@@ -90,7 +91,10 @@ function WordsPage() {
                             <button
                                 key={word.id}
                                 type="button"
-                                onClick={() => setEditingWordId(word.id)}
+                                onClick={() => {
+                                    haptic('medium')
+                                    setEditingWordId(word.id)
+                                }}
                                 className="w-full bg-white border border-black/5 rounded-[14px] p-4 flex items-center justify-between text-left shadow-[0_1px_3px_rgba(0,0,0,0.02)] active:scale-[0.98] transition-transform"
                             >
                                 <div className="flex flex-col gap-1 pr-3 min-w-0">

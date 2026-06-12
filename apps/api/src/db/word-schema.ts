@@ -17,6 +17,8 @@ export const wordSet = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    // フィールド設定をJSON文字列で保存 (表示/非表示、並び順)
+    settings: text("settings"),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),

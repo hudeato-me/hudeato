@@ -3,6 +3,7 @@ import { useState, useRef, useCallback } from 'react';
 export function useWordEntryForm() {
     const [word, setWord] = useState('');
     const [locationLabel, setLocationLabel] = useState('');
+    const [imageKey, setImageKey] = useState<string | null>(null);
     // 複数のMeaningを配列で管理するState。初期状態は1つ。
     const [meanings, setMeanings] = useState([
         {
@@ -70,7 +71,7 @@ export function useWordEntryForm() {
         return {
             text: word,
             locationLabel: locationLabel || null,
-            imageKey: null,
+            imageKey: imageKey,
             meanings: meanings.map((m, idx) => ({
                 meaning: m.meaning || '意味なし',
                 partOfSpeech: m.partOfSpeech || null,
@@ -83,13 +84,15 @@ export function useWordEntryForm() {
                 slot: idx + 1,
             })),
         };
-    }, [word, locationLabel, meanings]);
+    }, [word, locationLabel, imageKey, meanings]);
 
     return {
         word,
         setWord,
         locationLabel,
         setLocationLabel,
+        imageKey,
+        setImageKey,
         meanings,
         setMeanings,
         activeTab,

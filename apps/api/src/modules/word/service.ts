@@ -2,6 +2,7 @@ import { createDb } from "../../db";
 import {
 	countData,
 	findWordById,
+	findImageKeysBySet,
 	findWordSets,
 	findWordsBySet,
 	getActivityTimestamps,
@@ -142,6 +143,11 @@ export const updateWord = async (
 // 単語の削除
 export const removeWord = async (db: Db, userId: string, wordSetId: string, wordId: string) => {
 	await deleteWordById(db, userId, wordSetId, wordId);
+};
+
+// セット配下の全単語のimageKey一覧を取得
+export const getImageKeysForSet = async (db: Db, userId: string, wordSetId: string) => {
+	return await findImageKeysBySet(db, userId, wordSetId);
 };
 
 // WordSetの作成

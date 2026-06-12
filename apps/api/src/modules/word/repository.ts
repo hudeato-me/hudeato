@@ -187,6 +187,17 @@ export const deleteWordSetById = async (db: Db, userId: string, wordSetId: strin
 		.where(and(eq(wordSet.id, wordSetId), eq(wordSet.userId, userId)));
 };
 
+// セット内の全単語のimageKey一覧を取得（セットを削除した時用）
+export const findImageKeysBySet = async (db: Db, userId: string, wordSetId: string) => {
+	const rows = await db.query.word.findMany({
+		where: and(eq(word.userId, userId), eq(word.wordSetId, wordSetId)),
+		columns: { imageKey: true },
+	});
+	return rows
+		.map((r) => r.imageKey)
+		.filter((k): k is string => !!k);
+};
+
 // 単語の作成 (意味も同時)
 export const insertWord = async (
 	db: Db,

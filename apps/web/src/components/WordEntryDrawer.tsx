@@ -5,6 +5,7 @@ import { useWordAutoSave } from '~/hooks/word-entry/useWordAutoSave';
 import { useSwipeToClose } from '~/hooks/word-entry/useSwipeToClose';
 import { usePullToDelete } from '~/hooks/word-entry/usePullToDelete';
 import { haptic } from '~/lib/haptic';
+import { ImagePicker } from '~/components/ImagePicker';
 import type { FieldSetting, WordSet } from '~/types';
 
 interface WordEntryDrawerProps {
@@ -103,6 +104,8 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         setWord,
         locationLabel,
         setLocationLabel,
+        imageKey,
+        setImageKey,
         meanings,
         setMeanings,
         activeTab,
@@ -190,6 +193,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
             const data = existingData.data;
             setWord(data.text);
             setLocationLabel(data.locationLabel ?? '');
+            setImageKey(data.imageKey ?? null);
             // 意味の配列をセットする
             if (data.meanings && data.meanings.length > 0) {
                 setMeanings(
@@ -210,7 +214,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
             const initPayload = {
                 text: data.text,
                 locationLabel: data.locationLabel ?? null,
-                imageKey: null,
+                imageKey: data.imageKey ?? null,
                 meanings: data.meanings && data.meanings.length > 0
                     ? data.meanings.map((m: any, idx: number) => ({
                         meaning: m.meaning || '意味なし',
@@ -243,6 +247,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
             };
             setWord('');
             setLocationLabel('');
+            setImageKey(null);
             setMeanings([initialMeaning]);
             setActiveTab(0);
         }
@@ -596,14 +601,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
                         {/* Photo */}
                         <div className="space-y-2">
                             <label className="text-gray-400 text-xs ml-1">Photo</label>
-                            <button type="button" className="w-full border border-gray-200 rounded-3xl h-32 flex flex-col items-center justify-center text-gray-400 hover:bg-gray-50 transition-colors gap-2">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-8 h-8">
-                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                                    <circle cx="8.5" cy="8.5" r="1.5" />
-                                    <polyline points="21 15 16 10 5 21" />
-                                </svg>
-                                <span className="text-sm">写真を追加</span>
-                            </button>
+                            <ImagePicker imageKey={imageKey} onChange={setImageKey} />
                         </div>
                     </div>
                 </div>

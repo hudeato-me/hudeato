@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { Bindings, WordsRouteVariables } from "../types";
-import { getWordSets, createWordSet, updateWordSet, removeWordSet } from "../modules/word/service";
+import { getImageKeysForSet, getWordSets, createWordSet, updateWordSet, removeWordSet } from "../modules/word/service";
+import { deleteImage } from "../modules/upload/service";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { handleZodError } from "../utils/error-validator";
@@ -62,7 +63,18 @@ const wordSets = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }
 		zValidator("param", z.object({ setId: z.string() }), handleZodError),
 		async (c) => {
 			const { setId } = c.req.valid("param");
-			await removeWordSet(c.get("db"), c.get("userId"), setId);
+			const db = c.get("db");
+			const userId = c.get("userId");
+			const bucket = c.env.IMAGES_BUCKET;
+
+			const imageKeys = await getImageKeysForSet(db, userId, setId);
+
+			await removeWordSet(db, userId, setId);
+
+			if (imageKeys.length > 0) {
+				Promise.allSettled(imageKeys.map((k) => deleteImage(bucket, k))).catch(() => { });
+			}
+
 			return c.json({ error: null, data: { success: true } } as const);
 		}
 	);

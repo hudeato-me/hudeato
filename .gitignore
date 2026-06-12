@@ -23,3 +23,5 @@ local.db-shm
 
 # claude
 .claude
+
+bash.exe.stackdump

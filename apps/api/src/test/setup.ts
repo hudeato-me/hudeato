@@ -6,7 +6,12 @@ import { drizzle } from "drizzle-orm/libsql";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import * as schema from "../db/auth-schema";
+import * as authSchema from "../db/auth-schema";
+import * as wordSchema from "../db/word-schema";
+
+// auth + word(学習系含む) の全スキーマをマージし、テストでも全テーブルの
+// relational query API を使えるようにする。
+const schema = { ...authSchema, ...wordSchema };
 
 // ---------------------------------------------------------------------------
 // In-memory Redis mock for secondaryStorage
@@ -69,10 +74,24 @@ export type InMemoryStorage = ReturnType<typeof createInMemoryStorage>;
 // ---------------------------------------------------------------------------
 // テスト用DB & Auth のセットアップ
 // ---------------------------------------------------------------------------
-const MIGRATION_SQL_PATH = path.resolve(
-	__dirname,
-	"../../migrations/0000_tiny_killraven.sql",
-);
+const MIGRATIONS_DIR = path.resolve(__dirname, "../../migrations");
+
+/**
+ * _journal.json の順序どおりに全マイグレーションSQLを読み込み、
+ * breakpoint マーカーで連結した1つのSQL文字列を返す。
+ * （word / word_meaning / 学習系テーブルもテストDBに作成するため）
+ */
+function loadAllMigrationsSql(): string {
+	const journal = JSON.parse(
+		fs.readFileSync(path.join(MIGRATIONS_DIR, "meta/_journal.json"), "utf-8"),
+	) as { entries: { tag: string }[] };
+
+	return journal.entries
+		.map((entry) =>
+			fs.readFileSync(path.join(MIGRATIONS_DIR, `${entry.tag}.sql`), "utf-8"),
+		)
+		.join("\n--> statement-breakpoint\n");
+}
 
 export interface TestContext {
 	auth: ReturnType<typeof betterAuth>;
@@ -93,8 +112,8 @@ export function createTestContext(): TestContext {
 	const client = createClient({ url: `file:${dbPath}` });
 	const db = drizzle(client, { schema });
 
-	// マイグレーション適用（同期的にSQLを読み込んでexecute）
-	const migrationSql = fs.readFileSync(MIGRATION_SQL_PATH, "utf-8");
+	// マイグレーション適用（全migrationを_journal順に連結して実行）
+	const migrationSql = loadAllMigrationsSql();
 	// statement-breakpoint で分割して実行
 	const statements = migrationSql
 		.split("--\u003e statement-breakpoint")

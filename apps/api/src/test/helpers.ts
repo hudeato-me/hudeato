@@ -1,6 +1,15 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { createDb } from "../db";
 import type { TestContext } from "./setup";
+
+/**
+ * テストDBファイルに対してフルスキーマ(auth + word + 学習系)の Drizzle ハンドルを生成する。
+ * repository の単体テストや、ルートのテスト用ミドルウェアで使う。
+ */
+export function createTestDb(ctx: TestContext) {
+	return createDb(`file:${ctx.dbPath}`);
+}
 
 // ---------------------------------------------------------------------------
 // テスト用 Hono app の生成
@@ -126,6 +135,26 @@ export async function requestWithSession(
 	return app.request(path, {
 		method: "GET",
 		headers: { Cookie: cookie },
+	});
+}
+
+/**
+ * セッションCookie付きで任意メソッドのJSONリクエストを送る汎用ヘルパー。
+ * body 未指定なら本文なし（GET/DELETE 等）で送る。
+ */
+export async function requestJson(
+	app: Hono,
+	method: string,
+	path: string,
+	cookie: string,
+	body?: unknown,
+) {
+	const headers: Record<string, string> = { Cookie: cookie };
+	if (body !== undefined) headers["Content-Type"] = "application/json";
+	return app.request(path, {
+		method,
+		headers,
+		...(body !== undefined ? { body: JSON.stringify(body) } : {}),
 	});
 }
 

@@ -16,6 +16,10 @@ local.db-shm
 .github/*
 !.github/workflows/
 
+# build output
+dist
+.output
+
 # coverage
 coverage
 

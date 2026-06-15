@@ -1,6 +1,6 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import type { ReviewMode, ReviewResult, StudyScope } from "@hudeato/schema";
-import { reviewLog, reviewState, word } from "../../db";
+import { reviewLog, reviewState, word, wordEmbedding } from "../../db";
 import { Db } from "../../types/words-route-type";
 
 // 学習(クイズ/カード)が共用する出題対象・レビュー記録のSQLクエリを定義する。
@@ -106,4 +106,64 @@ export const saveReview = async (
 		// 直前に upsert しているため必ず存在する
 		return state!;
 	});
+};
+
+// ---------------------------------------------------------------------------
+// ベクトル埋め込み（Turso Vector）。クイズのディストラクタ近傍検索に使う。
+// 値は vector32() / 検索は vector_distance_cos() で扱う。
+// ---------------------------------------------------------------------------
+
+// 単語の埋め込みベクトルを upsert する。
+export const upsertWordEmbedding = async (
+	db: Db,
+	wordId: string,
+	vector: number[],
+	model: string,
+) => {
+	const vectorJson = JSON.stringify(vector);
+	await db
+		.insert(wordEmbedding)
+		.values({
+			wordId,
+			embedding: sql`vector32(${vectorJson})`,
+			model,
+		})
+		.onConflictDoUpdate({
+			target: wordEmbedding.wordId,
+			set: {
+				embedding: sql`vector32(${vectorJson})`,
+				model,
+				updatedAt: new Date(),
+			},
+		});
+};
+
+// クエリベクトルに近い単語IDを近い順に返す（コサイン距離の昇順）。
+// userId / wordSetId スコープで絞り、excludeWordId を除外できる。
+export const findNearestWordIds = async (
+	db: Db,
+	userId: string,
+	wordSetId: string,
+	queryVector: number[],
+	k: number,
+	excludeWordId?: string,
+): Promise<Array<{ wordId: string; distance: number }>> => {
+	const queryJson = JSON.stringify(queryVector);
+	const distance = sql<number>`vector_distance_cos(${wordEmbedding.embedding}, vector32(${queryJson}))`;
+
+	const conditions = [
+		eq(word.userId, userId),
+		eq(word.wordSetId, wordSetId),
+	];
+	if (excludeWordId) {
+		conditions.push(ne(wordEmbedding.wordId, excludeWordId));
+	}
+
+	return db
+		.select({ wordId: wordEmbedding.wordId, distance })
+		.from(wordEmbedding)
+		.innerJoin(word, eq(word.id, wordEmbedding.wordId))
+		.where(and(...conditions))
+		.orderBy(asc(distance))
+		.limit(k);
 };

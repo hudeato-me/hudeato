@@ -100,6 +100,18 @@ describe("word_embedding 近傍検索", () => {
 		expect(results.map((r) => r.wordId)).not.toContain("word-other");
 	});
 
+	it("不正な入力(空ベクトル/非正のk)は実行前に弾く", async () => {
+		await expect(
+			upsertWordEmbedding(db, words.near, [], "dummy"),
+		).rejects.toThrow();
+		await expect(
+			findNearestWordIds(db, userA, setA, query, 0),
+		).rejects.toThrow();
+		await expect(
+			findNearestWordIds(db, userA, setA, [], 3),
+		).rejects.toThrow();
+	});
+
 	it("upsert は同一単語のベクトルを上書きする", async () => {
 		await upsertWordEmbedding(db, words.near, vec([-1]), "dummy-v2");
 		// near を逆方向に更新したので、最も近いのは mid になる

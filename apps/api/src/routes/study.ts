@@ -7,7 +7,10 @@ import {
 	StudyTargetsQuerySchema,
 } from "@hudeato/schema";
 import { Bindings, WordsRouteVariables } from "../types";
-import { findWordForUser } from "../modules/study/repository";
+import {
+	findMeaningForWord,
+	findWordForUser,
+} from "../modules/study/repository";
 import { getStudyTargets, recordReview } from "../modules/study/service";
 import { handleZodError } from "../utils/error-validator";
 
@@ -46,6 +49,14 @@ const study = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 			const owned = await findWordForUser(db, userId, setId, body.wordId);
 			if (!owned) {
 				return c.json({ error: "Not Found", data: null } as const, 404);
+			}
+
+			// meaningId 指定時は、その意味が対象単語に属するか確認（整合性確保）
+			if (body.meaningId) {
+				const meaning = await findMeaningForWord(db, body.wordId, body.meaningId);
+				if (!meaning) {
+					return c.json({ error: "Not Found", data: null } as const, 404);
+				}
 			}
 
 			const reviewState = await recordReview(db, body);

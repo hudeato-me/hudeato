@@ -1,6 +1,6 @@
 import { and, asc, eq, ne, sql } from "drizzle-orm";
 import type { ReviewMode, ReviewResult, StudyScope } from "@hudeato/schema";
-import { reviewLog, reviewState, word, wordEmbedding } from "../../db";
+import { reviewLog, reviewState, word, wordEmbedding, wordMeaning } from "../../db";
 import { Db } from "../../types/words-route-type";
 
 // 学習(クイズ/カード)が共用する出題対象・レビュー記録のSQLクエリを定義する。
@@ -42,6 +42,18 @@ export const findWordForUser = async (
 			eq(word.wordSetId, wordSetId),
 			eq(word.id, wordId),
 		),
+		columns: { id: true },
+	});
+};
+
+// 指定の meaning がその単語に属するか確認する（review 記録の整合性確保）。
+export const findMeaningForWord = async (
+	db: Db,
+	wordId: string,
+	meaningId: string,
+) => {
+	return db.query.wordMeaning.findFirst({
+		where: and(eq(wordMeaning.id, meaningId), eq(wordMeaning.wordId, wordId)),
 		columns: { id: true },
 	});
 };
@@ -113,6 +125,13 @@ export const saveReview = async (
 // 値は vector32() / 検索は vector_distance_cos() で扱う。
 // ---------------------------------------------------------------------------
 
+// ベクトルが有限な数値の非空配列であることを検証する（SQL実行前のガード）。
+const assertFiniteVector = (v: number[]) => {
+	if (v.length === 0 || v.some((n) => !Number.isFinite(n))) {
+		throw new Error("vector must contain finite numeric values");
+	}
+};
+
 // 単語の埋め込みベクトルを upsert する。
 export const upsertWordEmbedding = async (
 	db: Db,
@@ -120,6 +139,7 @@ export const upsertWordEmbedding = async (
 	vector: number[],
 	model: string,
 ) => {
+	assertFiniteVector(vector);
 	const vectorJson = JSON.stringify(vector);
 	await db
 		.insert(wordEmbedding)
@@ -148,6 +168,10 @@ export const findNearestWordIds = async (
 	k: number,
 	excludeWordId?: string,
 ): Promise<Array<{ wordId: string; distance: number }>> => {
+	if (!Number.isInteger(k) || k < 1) {
+		throw new Error("k must be a positive integer");
+	}
+	assertFiniteVector(queryVector);
 	const queryJson = JSON.stringify(queryVector);
 	const distance = sql<number>`vector_distance_cos(${wordEmbedding.embedding}, vector32(${queryJson}))`;
 

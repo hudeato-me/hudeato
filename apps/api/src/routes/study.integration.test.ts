@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { reviewLog, reviewState, user, word, wordSet } from "../db";
+import { reviewLog, reviewState, user, word, wordMeaning, wordSet } from "../db";
 import {
 	createStudyTestApp,
 	createTestDb,
@@ -26,9 +26,11 @@ const setId = "set-a";
 const wordId = "word-a1";
 const masteredWordId = "word-a2";
 // 別ユーザー所有の単語（認可確認用）
+const myMeaningId = "meaning-a1";
 const otherUserId = "user-b";
 const otherSetId = "set-b";
 const otherWordId = "word-b1";
+const otherMeaningId = "meaning-b1";
 
 beforeAll(async () => {
 	ctx = createTestContext() as TestContext & {
@@ -72,6 +74,12 @@ beforeAll(async () => {
 		wordSetId: otherSetId,
 		text: "delta",
 	});
+
+	// 各単語に意味を1件ずつ作成（meaningId 整合性チェック用）
+	await db.insert(wordMeaning).values([
+		{ id: myMeaningId, wordId, meaning: "alpha-meaning", slot: 1 },
+		{ id: otherMeaningId, wordId: otherWordId, meaning: "delta-meaning", slot: 1 },
+	]);
 });
 
 afterAll(() => {
@@ -173,6 +181,28 @@ describe("POST /api/v1/study/:setId/review", () => {
 			.from(reviewLog)
 			.where(eq(reviewLog.wordId, wordId));
 		expect(logs).toHaveLength(2);
+	});
+
+	it("対象単語に属する meaningId は記録できる（flashcard）", async () => {
+		const res = await requestJson(
+			app,
+			"POST",
+			`/api/v1/study/${setId}/review`,
+			cookie,
+			{ wordId, meaningId: myMeaningId, mode: "flashcard", result: "known" },
+		);
+		expect(res.status).toBe(201);
+	});
+
+	it("別単語に属する meaningId は404（整合性チェック）", async () => {
+		const res = await requestJson(
+			app,
+			"POST",
+			`/api/v1/study/${setId}/review`,
+			cookie,
+			{ wordId, meaningId: otherMeaningId, mode: "flashcard", result: "known" },
+		);
+		expect(res.status).toBe(404);
 	});
 });
 

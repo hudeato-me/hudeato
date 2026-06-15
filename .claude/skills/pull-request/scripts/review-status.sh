@@ -9,11 +9,10 @@
 #
 #   環境変数:
 #     PR_REVIEW_BOTS  ゲート扱いする bot ログイン（空白区切り）。
-#                     既定: "coderabbitai[bot] cubic-dev-ai[bot]"
-#                     ※ このリポジトリは現状 CI/bot 未設定。導入後そのまま機能する。
+#                     既定: "coderabbitai[bot]"
 set -euo pipefail
 
-PR_REVIEW_BOTS="${PR_REVIEW_BOTS:-coderabbitai[bot] cubic-dev-ai[bot]}"
+PR_REVIEW_BOTS="${PR_REVIEW_BOTS:-coderabbitai[bot]}"
 
 err() { printf '%s\n' "$*" >&2; }
 

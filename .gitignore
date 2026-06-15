@@ -21,7 +21,8 @@ local.db-shm
 # turbo
 .turbo
 
-# claude
-.claude
+# claude（settings 等はローカル限定、skills はチーム共有のため追跡する）
+.claude/*
+!.claude/skills/
 
 bash.exe.stackdump

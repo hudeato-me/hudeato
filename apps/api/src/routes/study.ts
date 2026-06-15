@@ -4,15 +4,33 @@ import { z } from "zod";
 import {
 	StudyReviewRequestSchema,
 	type StudyReviewResponse,
+	StudyTargetsQuerySchema,
 } from "@hudeato/schema";
 import { Bindings, WordsRouteVariables } from "../types";
 import { findWordForUser } from "../modules/study/repository";
-import { recordReview } from "../modules/study/service";
+import { getStudyTargets, recordReview } from "../modules/study/service";
 import { handleZodError } from "../utils/error-validator";
 
 // 学習(クイズ/カード)が共用する土台API。
 // マウント: /api/v1/study
 const study = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
+	// 出題対象の単語ID群を取得（scope=all|unmastered）
+	.get(
+		"/:setId/targets",
+		zValidator("param", z.object({ setId: z.string() }), handleZodError),
+		zValidator("query", StudyTargetsQuerySchema, handleZodError),
+		async (c) => {
+			const { setId } = c.req.valid("param");
+			const { scope } = c.req.valid("query");
+			const result = await getStudyTargets(
+				c.get("db"),
+				c.get("userId"),
+				setId,
+				scope,
+			);
+			return c.json(result);
+		},
+	)
 	// レビュー結果を記録（review_log 追記 + review_state 更新）
 	.post(
 		"/:setId/review",

@@ -24,6 +24,7 @@ let cookie: string;
 // userA(ログインユーザー) の単語
 const setId = "set-a";
 const wordId = "word-a1";
+const masteredWordId = "word-a2";
 // 別ユーザー所有の単語（認可確認用）
 const otherUserId = "user-b";
 const otherSetId = "set-b";
@@ -47,9 +48,16 @@ beforeAll(async () => {
 
 	// ログインユーザーの単語
 	await db.insert(wordSet).values({ id: setId, userId: myUserId, name: "Set A" });
-	await db
-		.insert(word)
-		.values({ id: wordId, userId: myUserId, wordSetId: setId, text: "alpha" });
+	await db.insert(word).values([
+		{ id: wordId, userId: myUserId, wordSetId: setId, text: "alpha" },
+		{
+			id: masteredWordId,
+			userId: myUserId,
+			wordSetId: setId,
+			text: "bravo",
+			isMastered: true,
+		},
+	]);
 
 	// 別ユーザーの単語
 	await db
@@ -165,5 +173,66 @@ describe("POST /api/v1/study/:setId/review", () => {
 			.from(reviewLog)
 			.where(eq(reviewLog.wordId, wordId));
 		expect(logs).toHaveLength(2);
+	});
+});
+
+describe("GET /api/v1/study/:setId/targets", () => {
+	it("未認証は401", async () => {
+		const res = await requestJson(
+			app,
+			"GET",
+			`/api/v1/study/${setId}/targets`,
+			"",
+		);
+		expect(res.status).toBe(401);
+	});
+
+	it("scope省略時は all 扱いでセット内全件を返す", async () => {
+		const res = await requestJson(
+			app,
+			"GET",
+			`/api/v1/study/${setId}/targets`,
+			cookie,
+		);
+		expect(res.status).toBe(200);
+		const body: Json = await res.json();
+		expect(body.scope).toBe("all");
+		expect(body.count).toBe(2);
+		expect([...body.wordIds].sort()).toEqual([wordId, masteredWordId].sort());
+	});
+
+	it("scope=unmastered は未習得の言葉のみ返す", async () => {
+		const res = await requestJson(
+			app,
+			"GET",
+			`/api/v1/study/${setId}/targets?scope=unmastered`,
+			cookie,
+		);
+		expect(res.status).toBe(200);
+		const body: Json = await res.json();
+		expect(body.scope).toBe("unmastered");
+		expect(body.wordIds).toEqual([wordId]);
+	});
+
+	it("不正な scope は400", async () => {
+		const res = await requestJson(
+			app,
+			"GET",
+			`/api/v1/study/${setId}/targets?scope=bogus`,
+			cookie,
+		);
+		expect(res.status).toBe(400);
+	});
+
+	it("他ユーザーのセットは空（認可スコープ）", async () => {
+		const res = await requestJson(
+			app,
+			"GET",
+			`/api/v1/study/${otherSetId}/targets`,
+			cookie,
+		);
+		expect(res.status).toBe(200);
+		const body: Json = await res.json();
+		expect(body.count).toBe(0);
 	});
 });

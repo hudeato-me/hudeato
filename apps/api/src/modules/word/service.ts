@@ -1,4 +1,3 @@
-import { createDb } from "../../db";
 import {
 	countData,
 	findWordById,

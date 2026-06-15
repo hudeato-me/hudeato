@@ -2,6 +2,8 @@ import { Polar } from "@polar-sh/sdk";
 import { Context } from "hono";
 
 export const handlePolarWebhook = async (c: Context) => {
+	// Polar クライアントは Webhook 検証実装(後続)で使用予定のため保持する
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	const polar = new Polar({
 		accessToken: c.env.POLAR_ACCESS_TOKEN,
 	});

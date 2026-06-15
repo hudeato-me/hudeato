@@ -90,6 +90,7 @@ const api = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 	.route("/dashboard", dashboard);
 
 // .route() の戻り値をチェーンして型を伝搬させる（Hono RPC に必要）
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const routes = app.route("/api", api);
 
 app.get("/", (c) => {

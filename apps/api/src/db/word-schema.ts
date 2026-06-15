@@ -18,7 +18,9 @@ export const EMBEDDING_DIM = 768;
 // Turso(libSQL) の Vector 型カラム。Drizzle にネイティブ型が無いため
 // customType で `F32_BLOB(次元数)` をそのまま列定義として出力する。
 // 値の挿入・検索は vector32() / vector_distance_cos() を使い repository 側で行う。
-const float32Blob = customType<{ data: Buffer; driverData: Buffer }>({
+// 値の読み書きは vector32()/vector_distance_cos() を使うため、ここでは
+// node の Buffer 型に依存しない汎用的な型(number[] / string)にしておく。
+const float32Blob = customType<{ data: number[]; driverData: string }>({
   dataType() {
     return `F32_BLOB(${EMBEDDING_DIM})`;
   },

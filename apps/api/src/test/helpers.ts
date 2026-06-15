@@ -1,6 +1,9 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { createMiddleware } from "hono/factory";
 import { createDb } from "../db";
+import study from "../routes/study";
+import type { WordsRouteVariables } from "../types";
 import type { TestContext } from "./setup";
 
 /**
@@ -9,6 +12,38 @@ import type { TestContext } from "./setup";
  */
 export function createTestDb(ctx: TestContext) {
 	return createDb(`file:${ctx.dbPath}`);
+}
+
+/**
+ * 学習系ルートを本番同様の認可ミドルウェア付きでマウントしたテストapp。
+ * 本番 index.ts と同じく、セッション検証 → db / userId を注入する。
+ */
+export function createStudyTestApp(ctx: TestContext) {
+	const db = createTestDb(ctx);
+	const app = new Hono();
+
+	app.on(["POST", "GET"], "/api/auth/*", (c) => ctx.auth.handler(c.req.raw));
+
+	const protectedMiddleware = createMiddleware<{
+		Variables: WordsRouteVariables;
+	}>(async (c, next) => {
+		const session = await ctx.auth.api.getSession({
+			headers: c.req.raw.headers,
+		});
+		if (!session) {
+			return c.json({ error: "Unauthorized" }, 401);
+		}
+		c.set("userId", session.user.id);
+		c.set("db", db);
+		await next();
+	});
+
+	const api = new Hono<{ Variables: WordsRouteVariables }>()
+		.use("*", protectedMiddleware)
+		.route("/v1/study", study);
+
+	app.route("/api", api);
+	return app;
 }
 
 // ---------------------------------------------------------------------------

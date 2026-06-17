@@ -35,7 +35,7 @@ export const recordReview = async (
 	});
 
 	return {
-		wordId: state.wordId,
+		meaningId: state.meaningId,
 		reps: state.reps,
 		lapses: state.lapses,
 		intervalDays: state.intervalDays,

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "3f06bc97-4f4e-4495-870c-1b45304c0a53",
+  "id": "234c82a4-0d4b-48f1-94c9-9e55711c84c5",
   "prevId": "6c5646ce-5144-4440-a45b-db616a3cc2ea",
   "tables": {
     "account": {
@@ -360,8 +360,8 @@
     "review_state": {
       "name": "review_state",
       "columns": {
-        "word_id": {
-          "name": "word_id",
+        "meaning_id": {
+          "name": "meaning_id",
           "type": "text",
           "primaryKey": true,
           "notNull": true,
@@ -425,12 +425,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "review_state_word_id_word_id_fk": {
-          "name": "review_state_word_id_word_id_fk",
+        "review_state_meaning_id_word_meaning_id_fk": {
+          "name": "review_state_meaning_id_word_meaning_id_fk",
           "tableFrom": "review_state",
-          "tableTo": "word",
+          "tableTo": "word_meaning",
           "columnsFrom": [
-            "word_id"
+            "meaning_id"
           ],
           "columnsTo": [
             "id"

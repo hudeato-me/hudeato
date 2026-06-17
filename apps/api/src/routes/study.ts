@@ -51,12 +51,10 @@ const study = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 				return c.json({ error: "Not Found", data: null } as const, 404);
 			}
 
-			// meaningId 指定時は、その意味が対象単語に属するか確認（整合性確保）
-			if (body.meaningId) {
-				const meaning = await findMeaningForWord(db, body.wordId, body.meaningId);
-				if (!meaning) {
-					return c.json({ error: "Not Found", data: null } as const, 404);
-				}
+			// 間隔反復は meaning 単位のため、指定の意味が対象単語に属するか確認する
+			const meaning = await findMeaningForWord(db, body.wordId, body.meaningId);
+			if (!meaning) {
+				return c.json({ error: "Not Found", data: null } as const, 404);
 			}
 
 			const reviewState = await recordReview(db, body);

@@ -102,7 +102,18 @@ describe("POST /api/v1/study/:setId/review", () => {
 			"POST",
 			`/api/v1/study/${setId}/review`,
 			cookie,
-			{ wordId, mode: "quiz", result: "maybe" },
+			{ wordId, meaningId: myMeaningId, mode: "quiz", result: "maybe" },
+		);
+		expect(res.status).toBe(400);
+	});
+
+	it("meaningId 欠落は400（必須）", async () => {
+		const res = await requestJson(
+			app,
+			"POST",
+			`/api/v1/study/${setId}/review`,
+			cookie,
+			{ wordId, mode: "quiz", result: "correct" },
 		);
 		expect(res.status).toBe(400);
 	});
@@ -113,7 +124,12 @@ describe("POST /api/v1/study/:setId/review", () => {
 			"POST",
 			`/api/v1/study/${setId}/review`,
 			cookie,
-			{ wordId: "no-such-word", mode: "quiz", result: "correct" },
+			{
+				wordId: "no-such-word",
+				meaningId: myMeaningId,
+				mode: "quiz",
+				result: "correct",
+			},
 		);
 		expect(res.status).toBe(404);
 	});
@@ -124,7 +140,12 @@ describe("POST /api/v1/study/:setId/review", () => {
 			"POST",
 			`/api/v1/study/${setId}/review`,
 			cookie,
-			{ wordId: otherWordId, mode: "quiz", result: "correct" },
+			{
+				wordId: otherWordId,
+				meaningId: otherMeaningId,
+				mode: "quiz",
+				result: "correct",
+			},
 		);
 		expect(res.status).toBe(404);
 		// review_log にも記録されない
@@ -141,12 +162,12 @@ describe("POST /api/v1/study/:setId/review", () => {
 			"POST",
 			`/api/v1/study/${setId}/review`,
 			cookie,
-			{ wordId, mode: "quiz", result: "correct" },
+			{ wordId, meaningId: myMeaningId, mode: "quiz", result: "correct" },
 		);
 		expect(res.status).toBe(201);
 		const body: Json = await res.json();
 		expect(body.success).toBe(true);
-		expect(body.reviewState.wordId).toBe(wordId);
+		expect(body.reviewState.meaningId).toBe(myMeaningId);
 		expect(body.reviewState.reps).toBe(1);
 		expect(body.reviewState.lapses).toBe(0);
 
@@ -158,7 +179,7 @@ describe("POST /api/v1/study/:setId/review", () => {
 		expect(logs[0].result).toBe("correct");
 
 		const state = await db.query.reviewState.findFirst({
-			where: eq(reviewState.wordId, wordId),
+			where: eq(reviewState.meaningId, myMeaningId),
 		});
 		expect(state?.reps).toBe(1);
 	});
@@ -169,7 +190,7 @@ describe("POST /api/v1/study/:setId/review", () => {
 			"POST",
 			`/api/v1/study/${setId}/review`,
 			cookie,
-			{ wordId, mode: "quiz", result: "wrong" },
+			{ wordId, meaningId: myMeaningId, mode: "quiz", result: "wrong" },
 		);
 		expect(res.status).toBe(201);
 		const body: Json = await res.json();

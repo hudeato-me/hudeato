@@ -45,17 +45,18 @@ export const StudyTargetsResponseSchema = z.object({
 export type StudyTargetsResponse = z.infer<typeof StudyTargetsResponseSchema>;
 
 // POST /study/:setId/review のリクエスト
+// 間隔反復は意味(meaning)単位で記録するため meaningId は必須。
 export const StudyReviewRequestSchema = z.object({
 	wordId: z.string().min(1),
-	meaningId: z.string().min(1).optional(),
+	meaningId: z.string().min(1),
 	mode: ReviewModeSchema,
 	result: ReviewResultSchema,
 });
 export type StudyReviewRequest = z.infer<typeof StudyReviewRequestSchema>;
 
-// review_state の公開表現（レビュー後の最新状態）
+// review_state の公開表現（レビュー後の最新状態）。meaning 単位。
 export const ReviewStateSchema = z.object({
-	wordId: z.string(),
+	meaningId: z.string(),
 	reps: z.number().int().nonnegative(),
 	lapses: z.number().int().nonnegative(),
 	intervalDays: z.number().int().nonnegative(),

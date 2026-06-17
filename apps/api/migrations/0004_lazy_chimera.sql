@@ -13,7 +13,7 @@ CREATE TABLE `review_log` (
 --> statement-breakpoint
 CREATE INDEX `review_log_word_id_idx` ON `review_log` (`word_id`);--> statement-breakpoint
 CREATE TABLE `review_state` (
-	`word_id` text PRIMARY KEY NOT NULL,
+	`meaning_id` text PRIMARY KEY NOT NULL,
 	`next_review_at` integer,
 	`interval_days` integer DEFAULT 0 NOT NULL,
 	`ease_factor` real DEFAULT 2.5 NOT NULL,
@@ -21,7 +21,7 @@ CREATE TABLE `review_state` (
 	`lapses` integer DEFAULT 0 NOT NULL,
 	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
 	`updated_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
-	FOREIGN KEY (`word_id`) REFERENCES `word`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`meaning_id`) REFERENCES `word_meaning`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
 CREATE TABLE `word_embedding` (

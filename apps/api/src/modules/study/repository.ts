@@ -71,7 +71,7 @@ export const saveReview = async (
 	params: {
 		logId: string;
 		wordId: string;
-		meaningId?: string;
+		meaningId: string;
 		mode: ReviewMode;
 		result: ReviewResult;
 	},
@@ -82,21 +82,21 @@ export const saveReview = async (
 		await tx.insert(reviewLog).values({
 			id: params.logId,
 			wordId: params.wordId,
-			meaningId: params.meaningId ?? null,
+			meaningId: params.meaningId,
 			mode: params.mode,
 			result: params.result,
 		});
 
-		// 正答→reps+1 / 誤答→lapses+1 & reps リセット の最小ロジック
+		// 正答→reps+1 / 誤答→lapses+1 & reps リセット の最小ロジック（meaning 単位）
 		await tx
 			.insert(reviewState)
 			.values({
-				wordId: params.wordId,
+				meaningId: params.meaningId,
 				reps: positive ? 1 : 0,
 				lapses: positive ? 0 : 1,
 			})
 			.onConflictDoUpdate({
-				target: reviewState.wordId,
+				target: reviewState.meaningId,
 				set: {
 					reps: positive ? sql`${reviewState.reps} + 1` : 0,
 					lapses: positive
@@ -113,7 +113,7 @@ export const saveReview = async (
 			.where(eq(word.id, params.wordId));
 
 		const state = await tx.query.reviewState.findFirst({
-			where: eq(reviewState.wordId, params.wordId),
+			where: eq(reviewState.meaningId, params.meaningId),
 		});
 		// 直前に upsert しているため必ず存在する
 		return state!;

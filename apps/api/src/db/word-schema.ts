@@ -122,12 +122,13 @@ export const wordMeaning = sqliteTable(
   ],
 );
 
-// 単語ごとのレビュー状態（間隔反復のスケジューリング器）。
-// word に対して 1:1。実アルゴリズムは P4 で実装し、ここでは器だけ用意する。
+// 意味ごとのレビュー状態（間隔反復のスケジューリング器）。
+// isRemembered が meaning 単位のため、間隔反復も word_meaning に対して 1:1 とする。
+// 実アルゴリズムは P4 で実装し、ここでは器だけ用意する。
 export const reviewState = sqliteTable("review_state", {
-  wordId: text("word_id")
+  meaningId: text("meaning_id")
     .primaryKey()
-    .references(() => word.id, { onDelete: "cascade" }),
+    .references(() => wordMeaning.id, { onDelete: "cascade" }),
   // 次回出題日（未スケジュールは null）
   nextReviewAt: integer("next_review_at", { mode: "timestamp_ms" }),
   // 現在の間隔（日数）
@@ -216,10 +217,6 @@ export const wordRelations = relations(word, ({ one, many }) => ({
     references: [wordSet.id],
   }),
   meanings: many(wordMeaning),
-  reviewState: one(reviewState, {
-    fields: [word.id],
-    references: [reviewState.wordId],
-  }),
   reviewLogs: many(reviewLog),
   embedding: one(wordEmbedding, {
     fields: [word.id],
@@ -232,13 +229,17 @@ export const wordMeaningRelations = relations(wordMeaning, ({ one, many }) => ({
     fields: [wordMeaning.wordId],
     references: [word.id],
   }),
+  reviewState: one(reviewState, {
+    fields: [wordMeaning.id],
+    references: [reviewState.meaningId],
+  }),
   reviewLogs: many(reviewLog),
 }));
 
 export const reviewStateRelations = relations(reviewState, ({ one }) => ({
-  word: one(word, {
-    fields: [reviewState.wordId],
-    references: [word.id],
+  meaning: one(wordMeaning, {
+    fields: [reviewState.meaningId],
+    references: [wordMeaning.id],
   }),
 }));
 

@@ -1,7 +1,7 @@
 CREATE TABLE `review_log` (
 	`id` text PRIMARY KEY NOT NULL,
 	`word_id` text NOT NULL,
-	`meaning_id` text,
+	`meaning_id` text NOT NULL,
 	`mode` text NOT NULL,
 	`result` text NOT NULL,
 	`reviewed_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,

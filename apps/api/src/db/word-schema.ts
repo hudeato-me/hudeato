@@ -156,10 +156,12 @@ export const reviewLog = sqliteTable(
     wordId: text("word_id")
       .notNull()
       .references(() => word.id, { onDelete: "cascade" }),
-    // カードは意味ごとに記録するため nullable
-    meaningId: text("meaning_id").references(() => wordMeaning.id, {
-      onDelete: "cascade",
-    }),
+    // レビューは意味(meaning)単位で記録するため必須
+    meaningId: text("meaning_id")
+      .notNull()
+      .references(() => wordMeaning.id, {
+        onDelete: "cascade",
+      }),
     // 'quiz' | 'flashcard'
     mode: text("mode").notNull(),
     // 'correct' | 'wrong' | 'known' | 'unknown'

@@ -8,7 +8,8 @@ CREATE TABLE `review_log` (
 	FOREIGN KEY (`word_id`) REFERENCES `word`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`meaning_id`) REFERENCES `word_meaning`(`id`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "review_log_mode_check" CHECK("review_log"."mode" IN ('quiz', 'flashcard')),
-	CONSTRAINT "review_log_result_check" CHECK("review_log"."result" IN ('correct', 'wrong', 'known', 'unknown'))
+	CONSTRAINT "review_log_result_check" CHECK("review_log"."result" IN ('correct', 'wrong', 'known', 'unknown')),
+	CONSTRAINT "review_log_mode_result_check" CHECK(("review_log"."mode" = 'quiz' AND "review_log"."result" IN ('correct', 'wrong')) OR ("review_log"."mode" = 'flashcard' AND "review_log"."result" IN ('known', 'unknown')))
 );
 --> statement-breakpoint
 CREATE INDEX `review_log_word_id_idx` ON `review_log` (`word_id`);--> statement-breakpoint

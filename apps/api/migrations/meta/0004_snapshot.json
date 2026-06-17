@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "234c82a4-0d4b-48f1-94c9-9e55711c84c5",
+  "id": "740ed1be-dec8-4081-b956-8dc9280e034e",
   "prevId": "6c5646ce-5144-4440-a45b-db616a3cc2ea",
   "tables": {
     "account": {
@@ -354,6 +354,10 @@
         "review_log_result_check": {
           "name": "review_log_result_check",
           "value": "\"review_log\".\"result\" IN ('correct', 'wrong', 'known', 'unknown')"
+        },
+        "review_log_mode_result_check": {
+          "name": "review_log_mode_result_check",
+          "value": "(\"review_log\".\"mode\" = 'quiz' AND \"review_log\".\"result\" IN ('correct', 'wrong')) OR (\"review_log\".\"mode\" = 'flashcard' AND \"review_log\".\"result\" IN ('known', 'unknown'))"
         }
       }
     },

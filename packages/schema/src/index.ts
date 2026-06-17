@@ -46,12 +46,27 @@ export type StudyTargetsResponse = z.infer<typeof StudyTargetsResponseSchema>;
 
 // POST /study/:setId/review のリクエスト
 // 間隔反復は意味(meaning)単位で記録するため meaningId は必須。
-export const StudyReviewRequestSchema = z.object({
-	wordId: z.string().min(1),
-	meaningId: z.string().min(1),
-	mode: ReviewModeSchema,
-	result: ReviewResultSchema,
-});
+// mode と result の組み合わせも検証する（quiz→correct/wrong, flashcard→known/unknown）。
+export const StudyReviewRequestSchema = z
+	.object({
+		wordId: z.string().min(1),
+		meaningId: z.string().min(1),
+		mode: ReviewModeSchema,
+		result: ReviewResultSchema,
+	})
+	.superRefine(({ mode, result }, ctx) => {
+		const validPair =
+			(mode === "quiz" && (result === "correct" || result === "wrong")) ||
+			(mode === "flashcard" &&
+				(result === "known" || result === "unknown"));
+		if (!validPair) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ["result"],
+				message: "result is not valid for the selected review mode",
+			});
+		}
+	});
 export type StudyReviewRequest = z.infer<typeof StudyReviewRequestSchema>;
 
 // review_state の公開表現（レビュー後の最新状態）。meaning 単位。

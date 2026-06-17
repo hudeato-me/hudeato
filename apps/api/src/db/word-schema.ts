@@ -175,6 +175,12 @@ export const reviewLog = sqliteTable(
       "review_log_result_check",
       sql`${table.result} IN ('correct', 'wrong', 'known', 'unknown')`,
     ),
+    // mode と result の整合性（quiz→correct/wrong, flashcard→known/unknown）を
+    // API 以外の書き込みでも崩さないよう DB レベルでも保証する。
+    check(
+      "review_log_mode_result_check",
+      sql`(${table.mode} = 'quiz' AND ${table.result} IN ('correct', 'wrong')) OR (${table.mode} = 'flashcard' AND ${table.result} IN ('known', 'unknown'))`,
+    ),
   ],
 );
 

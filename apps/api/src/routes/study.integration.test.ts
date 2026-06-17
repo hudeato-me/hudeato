@@ -107,6 +107,17 @@ describe("POST /api/v1/study/:setId/review", () => {
 		expect(res.status).toBe(400);
 	});
 
+	it("mode と result の組み合わせが不正(quiz+known)は400", async () => {
+		const res = await requestJson(
+			app,
+			"POST",
+			`/api/v1/study/${setId}/review`,
+			cookie,
+			{ wordId, meaningId: myMeaningId, mode: "quiz", result: "known" },
+		);
+		expect(res.status).toBe(400);
+	});
+
 	it("meaningId 欠落は400（必須）", async () => {
 		const res = await requestJson(
 			app,

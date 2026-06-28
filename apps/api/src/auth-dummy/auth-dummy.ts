@@ -1,7 +1,6 @@
-import { Context } from "hono";
 import { betterAuthConfig } from "../lib/auth/better-auth-config";
 
-const getAuth = (c: Context) => {
+const getAuth = () => {
 	return betterAuthConfig({
 		tursoDatabaseUrl: process.env.TURSO_DATABASE_URL!,
 		tursoAuthToken: process.env.TURSO_AUTH_TOKEN!,

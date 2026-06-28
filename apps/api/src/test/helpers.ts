@@ -1,6 +1,50 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { createMiddleware } from "hono/factory";
+import { createDb } from "../db";
+import study from "../routes/study";
+import type { WordsRouteVariables } from "../types";
 import type { TestContext } from "./setup";
+
+/**
+ * テストDBファイルに対してフルスキーマ(auth + word + 学習系)の Drizzle ハンドルを生成する。
+ * repository の単体テストや、ルートのテスト用ミドルウェアで使う。
+ */
+export function createTestDb(ctx: TestContext) {
+	return createDb(`file:${ctx.dbPath}`);
+}
+
+/**
+ * 学習系ルートを本番同様の認可ミドルウェア付きでマウントしたテストapp。
+ * 本番 index.ts と同じく、セッション検証 → db / userId を注入する。
+ */
+export function createStudyTestApp(ctx: TestContext) {
+	const db = createTestDb(ctx);
+	const app = new Hono();
+
+	app.on(["POST", "GET"], "/api/auth/*", (c) => ctx.auth.handler(c.req.raw));
+
+	const protectedMiddleware = createMiddleware<{
+		Variables: WordsRouteVariables;
+	}>(async (c, next) => {
+		const session = await ctx.auth.api.getSession({
+			headers: c.req.raw.headers,
+		});
+		if (!session) {
+			return c.json({ error: "Unauthorized" }, 401);
+		}
+		c.set("userId", session.user.id);
+		c.set("db", db);
+		await next();
+	});
+
+	const api = new Hono<{ Variables: WordsRouteVariables }>()
+		.use("*", protectedMiddleware)
+		.route("/v1/study", study);
+
+	app.route("/api", api);
+	return app;
+}
 
 // ---------------------------------------------------------------------------
 // テスト用 Hono app の生成
@@ -126,6 +170,26 @@ export async function requestWithSession(
 	return app.request(path, {
 		method: "GET",
 		headers: { Cookie: cookie },
+	});
+}
+
+/**
+ * セッションCookie付きで任意メソッドのJSONリクエストを送る汎用ヘルパー。
+ * body 未指定なら本文なし（GET/DELETE 等）で送る。
+ */
+export async function requestJson(
+	app: Hono,
+	method: string,
+	path: string,
+	cookie: string,
+	body?: unknown,
+) {
+	const headers: Record<string, string> = { Cookie: cookie };
+	if (body !== undefined) headers["Content-Type"] = "application/json";
+	return app.request(path, {
+		method,
+		headers,
+		...(body !== undefined ? { body: JSON.stringify(body) } : {}),
 	});
 }
 

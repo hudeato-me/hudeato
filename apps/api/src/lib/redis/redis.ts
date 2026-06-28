@@ -1,5 +1,4 @@
 import { Redis } from "@upstash/redis/cloudflare";
-import { Bindings } from "../../types";
 
 export type RedisParams = {
 	upstashRedisRestUrl: string;

@@ -1,5 +1,5 @@
 import { and, asc, count, desc, eq, like, sql } from "drizzle-orm";
-import { createDb, wordMeaning, wordSet } from "../../db";
+import { wordMeaning, wordSet } from "../../db";
 import { word } from "../../db";
 
 import { Db } from "../../types/words-route-type";

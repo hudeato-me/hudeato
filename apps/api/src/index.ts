@@ -10,6 +10,7 @@ import words from "./routes/words";
 import dashboard from "./routes/dashboard";
 import wordSets from "./routes/word-sets";
 import upload from "./routes/upload";
+import study from "./routes/study";
 import { rateLimiter } from "./utils/rate-limiter";
 
 const app = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>();
@@ -84,10 +85,12 @@ const api = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 	.use("*", rateLimiter)
 	.route("/v1/sets", wordSets)
 	.route("/v1/sets/:setId/words", words)
+	.route("/v1/study", study)
 	.route("/v1/upload", upload)
 	.route("/dashboard", dashboard);
 
 // .route() の戻り値をチェーンして型を伝搬させる（Hono RPC に必要）
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const routes = app.route("/api", api);
 
 app.get("/", (c) => {

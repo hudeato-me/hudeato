@@ -57,7 +57,7 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 			return c.json(results);
 		}
 	)
-	//　単語詳細情報の取得 
+	// 単語詳細情報の取得 
 	.get(
 		"/:wordId",
 		// パスパラメータの検証

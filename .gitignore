@@ -12,8 +12,16 @@ local.db-shm
 # wrangler
 .wrangler
 
-# github
-.github
+# github（CI workflow は追跡し、それ以外のローカル設定は無視する）
+.github/*
+!.github/workflows/
+
+# build output
+dist
+.output
+
+# coverage
+coverage
 
 # agent
 .agent

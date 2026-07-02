@@ -1,0 +1,278 @@
+import { asc, eq } from "drizzle-orm";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+// gemini モジュールをモックして、生成結果を差し替えられるようにする。
+const { generateWordCompletion } = vi.hoisted(() => ({
+	generateWordCompletion: vi.fn(),
+}));
+vi.mock("./gemini", () => ({ generateWordCompletion }));
+
+import { user, word, wordMeaning, wordSet } from "../../db";
+import { createTestDb } from "../../test/helpers";
+import { createTestContext, type TestContext } from "../../test/setup";
+import {
+	completeWord,
+	hasEmptyCompletionFields,
+	mergeEmptyFields,
+} from "./completion";
+import type { CompletionMeaningRow } from "./repository";
+
+// ---------------------------------------------------------------------------
+// 純粋関数（DB不要）
+// ---------------------------------------------------------------------------
+
+describe("hasEmptyCompletionFields", () => {
+	it("意味が空配列なら true（全てAI任せ）", () => {
+		expect(hasEmptyCompletionFields([])).toBe(true);
+	});
+
+	it("いずれかの補完対象が空なら true", () => {
+		expect(hasEmptyCompletionFields([{ meaning: "x", example: "" }])).toBe(true);
+		expect(hasEmptyCompletionFields([{ meaning: "x", phonetic: null }])).toBe(
+			true,
+		);
+	});
+
+	it("補完対象が全て埋まっていれば false", () => {
+		expect(
+			hasEmptyCompletionFields([
+				{
+					meaning: "x",
+					partOfSpeech: "n",
+					phonetic: "p",
+					example: "e",
+					collocation: "c",
+					synonym: "s",
+					etymology: "y",
+				},
+			]),
+		).toBe(false);
+	});
+});
+
+describe("mergeEmptyFields", () => {
+	const row = (over: Partial<CompletionMeaningRow>): CompletionMeaningRow => ({
+		id: "m1",
+		slot: 1,
+		meaning: "",
+		partOfSpeech: null,
+		phonetic: null,
+		example: null,
+		collocation: null,
+		synonym: null,
+		etymology: null,
+		...over,
+	});
+
+	it("既存の空欄だけ埋め、入力済みは触らない", () => {
+		const existing = [
+			row({ id: "m1", meaning: "入力済み", example: "既存例文" }),
+		];
+		const generated = [
+			{
+				meaning: "AI意味",
+				partOfSpeech: "名詞",
+				phonetic: "/x/",
+				example: "AI例文",
+				collocation: "col",
+				synonym: "syn",
+				etymology: "ety",
+			},
+		];
+		const { updates, inserts } = mergeEmptyFields(existing, generated);
+		expect(inserts).toHaveLength(0);
+		expect(updates).toHaveLength(1);
+		expect(updates[0].id).toBe("m1");
+		// 入力済みは触らない
+		expect(updates[0].patch.meaning).toBeUndefined();
+		expect(updates[0].patch.example).toBeUndefined();
+		// 空だった項目は埋まる
+		expect(updates[0].patch.partOfSpeech).toBe("名詞");
+		expect(updates[0].patch.phonetic).toBe("/x/");
+		expect(updates[0].patch.synonym).toBe("syn");
+	});
+
+	it("既存が無ければ AI 語義を新規スロットに追加する", () => {
+		const { updates, inserts } = mergeEmptyFields(
+			[],
+			[{ meaning: "一つ目" }, { meaning: "二つ目" }],
+		);
+		expect(updates).toHaveLength(0);
+		expect(inserts.map((i) => [i.slot, i.meaning])).toEqual([
+			[1, "一つ目"],
+			[2, "二つ目"],
+		]);
+	});
+
+	it("追加スロットは最大5まで", () => {
+		const generated = Array.from({ length: 8 }, (_, i) => ({
+			meaning: `m${i}`,
+		}));
+		const { inserts } = mergeEmptyFields([], generated);
+		expect(inserts).toHaveLength(5);
+		expect(inserts[4].slot).toBe(5);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// completeWord（DB結合・Geminiモック）
+// ---------------------------------------------------------------------------
+
+describe("completeWord", () => {
+	let ctx: TestContext & { _applyMigrations: () => Promise<void> };
+	let db: ReturnType<typeof createTestDb>;
+
+	beforeAll(async () => {
+		ctx = createTestContext() as TestContext & {
+			_applyMigrations: () => Promise<void>;
+		};
+		await ctx._applyMigrations();
+		db = createTestDb(ctx);
+		await db.insert(user).values({ id: "u1", name: "U", email: "u@example.com" });
+		await db.insert(wordSet).values({ id: "s1", userId: "u1", name: "S" });
+	});
+
+	afterAll(() => ctx.cleanup());
+	beforeEach(() => vi.clearAllMocks());
+
+	it("空欄のみ補完し、入力済みは保持して status を done にする", async () => {
+		await db.insert(word).values({
+			id: "w1",
+			userId: "u1",
+			wordSetId: "s1",
+			text: "ephemeral",
+			completionStatus: "pending",
+		});
+		await db.insert(wordMeaning).values({
+			id: "m1",
+			wordId: "w1",
+			meaning: "",
+			slot: 1,
+			example: "手入力の例文",
+		});
+		generateWordCompletion.mockResolvedValue({
+			meanings: [
+				{
+					meaning: "はかない",
+					partOfSpeech: "形容詞",
+					example: "AI例文",
+					phonetic: "/ɪˈfɛm(ə)rəl/",
+					collocation: null,
+					synonym: null,
+					etymology: null,
+				},
+			],
+		});
+
+		await completeWord(
+			{ db, apiKey: "k" },
+			{ wordId: "w1", userId: "u1", wordSetId: "s1", lang: "ja", prompt: null },
+		);
+
+		const m = await db.query.wordMeaning.findFirst({
+			where: eq(wordMeaning.id, "m1"),
+		});
+		expect(m?.meaning).toBe("はかない"); // 空だったので補完
+		expect(m?.partOfSpeech).toBe("形容詞");
+		expect(m?.phonetic).toBe("/ɪˈfɛm(ə)rəl/");
+		expect(m?.example).toBe("手入力の例文"); // 入力済みは保持
+		const w = await db.query.word.findFirst({ where: eq(word.id, "w1") });
+		expect(w?.completionStatus).toBe("done");
+	});
+
+	it("意味が無い単語には AI 語義を新規追加する", async () => {
+		await db.insert(word).values({
+			id: "w2",
+			userId: "u1",
+			wordSetId: "s1",
+			text: "serendipity",
+			completionStatus: "pending",
+		});
+		generateWordCompletion.mockResolvedValue({
+			meanings: [{ meaning: "偶然の幸運" }, { meaning: "掘り出し上手" }],
+		});
+
+		await completeWord(
+			{ db, apiKey: "k" },
+			{ wordId: "w2", userId: "u1", wordSetId: "s1", lang: "ja", prompt: null },
+		);
+
+		const ms = await db.query.wordMeaning.findMany({
+			where: eq(wordMeaning.wordId, "w2"),
+			orderBy: [asc(wordMeaning.slot)],
+		});
+		expect(ms.map((m) => m.meaning)).toEqual(["偶然の幸運", "掘り出し上手"]);
+		const w = await db.query.word.findFirst({ where: eq(word.id, "w2") });
+		expect(w?.completionStatus).toBe("done");
+	});
+
+	it("promptを生成に渡す", async () => {
+		await db.insert(word).values({
+			id: "w3",
+			userId: "u1",
+			wordSetId: "s1",
+			text: "bank",
+			completionStatus: "pending",
+		});
+		generateWordCompletion.mockResolvedValue({
+			meanings: [{ meaning: "土手" }],
+		});
+
+		await completeWord(
+			{ db, apiKey: "k" },
+			{
+				wordId: "w3",
+				userId: "u1",
+				wordSetId: "s1",
+				lang: "ja",
+				prompt: "川辺の文脈で",
+			},
+		);
+
+		expect(generateWordCompletion).toHaveBeenCalledWith(
+			expect.objectContaining({ word: "bank", prompt: "川辺の文脈で" }),
+		);
+	});
+
+	it("存在しない単語では生成を呼ばず何もしない", async () => {
+		generateWordCompletion.mockResolvedValue({ meanings: [{ meaning: "x" }] });
+		await expect(
+			completeWord(
+				{ db, apiKey: "k" },
+				{
+					wordId: "ghost",
+					userId: "u1",
+					wordSetId: "s1",
+					lang: "ja",
+					prompt: null,
+				},
+			),
+		).resolves.toBeUndefined();
+		expect(generateWordCompletion).not.toHaveBeenCalled();
+	});
+
+	it("他ユーザーの単語は補完対象にしない（スコープ）", async () => {
+		await db.insert(user).values({ id: "u2", name: "U2", email: "u2@example.com" });
+		await db.insert(word).values({
+			id: "w-other",
+			userId: "u2",
+			wordSetId: "s1",
+			text: "foreign",
+			completionStatus: "pending",
+		});
+		generateWordCompletion.mockResolvedValue({ meanings: [{ meaning: "x" }] });
+
+		// u1 として w-other を補完しようとしても対象が見つからない
+		await completeWord(
+			{ db, apiKey: "k" },
+			{
+				wordId: "w-other",
+				userId: "u1",
+				wordSetId: "s1",
+				lang: "ja",
+				prompt: null,
+			},
+		);
+		expect(generateWordCompletion).not.toHaveBeenCalled();
+	});
+});

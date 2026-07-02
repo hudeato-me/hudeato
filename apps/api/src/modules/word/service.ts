@@ -14,6 +14,7 @@ import {
 	deleteWordById,
 } from "./repository";
 
+import type { CompletionStatus } from "@hudeato/schema";
 import { Db } from "../../types/words-route-type";
 
 // サービス関数を定義
@@ -108,11 +109,12 @@ export const createWord = async (
 		etymology?: string | null;
 		source?: string | null;
 		slot: number;
-	}>
+	}>,
+	options?: { completionStatus?: CompletionStatus }
 ) => {
 	const wordId = crypto.randomUUID();
 	const meaningsWithId = meanings.map((m) => ({ ...m, id: crypto.randomUUID() }));
-	await insertWord(db, userId, wordSetId, wordId, data, meaningsWithId);
+	await insertWord(db, userId, wordSetId, wordId, data, meaningsWithId, options?.completionStatus);
 	return { id: wordId };
 };
 

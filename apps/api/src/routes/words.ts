@@ -4,11 +4,13 @@ import { z } from "zod";
 import { Bindings, WordsRouteVariables } from "../types";
 import { getWordById, getWords, searchWordList, createWord, updateWord, removeWord } from "../modules/word/service";
 import { deleteImage } from "../modules/upload/service";
+import { failWordCompletion, hasEmptyCompletionFields } from "../modules/ai/completion";
 import { handleZodError } from "../utils/error-validator";
 
 // 単語の意味 (WordMeaning) スキーマ
+// AI補完ON時は空欄を許容するため meaning は空文字も可（既定は空文字）。
 const wordMeaningSchema = z.object({
-	meaning: z.string().min(1),
+	meaning: z.string().optional().default(""),
 	partOfSpeech: z.string().nullable().optional(),
 	phonetic: z.string().nullable().optional(),
 	example: z.string().nullable().optional(),
@@ -20,12 +22,37 @@ const wordMeaningSchema = z.object({
 });
 
 // 単語の作成/更新用スキーマ
-const wordMutationSchema = z.object({
-	text: z.string().min(1),
-	locationLabel: z.string().nullable().optional(),
-	imageKey: z.string().nullable().optional(),
-	meanings: z.array(wordMeaningSchema).min(1),
-});
+// autoComplete=true のときは空欄補完を行うため meanings が空/空欄でも許容する。
+// autoComplete=false（既定, PUT編集など）では従来どおり意味を必須にする。
+const wordMutationSchema = z
+	.object({
+		text: z.string().min(1),
+		locationLabel: z.string().nullable().optional(),
+		imageKey: z.string().nullable().optional(),
+		meanings: z.array(wordMeaningSchema),
+		autoComplete: z.boolean().optional().default(false),
+		completionPrompt: z.string().nullable().optional(),
+	})
+	.superRefine((val, ctx) => {
+		if (val.autoComplete) return;
+		if (val.meanings.length === 0) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ["meanings"],
+				message: "meanings must have at least one item",
+			});
+			return;
+		}
+		val.meanings.forEach((m, i) => {
+			if (!m.meaning.trim()) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ["meanings", i, "meaning"],
+					message: "meaning is required",
+				});
+			}
+		});
+	});
 
 const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 
@@ -78,9 +105,45 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 		zValidator("json", wordMutationSchema, handleZodError),
 		async (c) => {
 			const { setId } = c.req.valid("param");
-			const { text, locationLabel, imageKey, meanings } = c.req.valid("json");
-			const result = await createWord(c.get("db"), c.get("userId"), setId, { text, locationLabel, imageKey }, meanings);
-			return c.json({ error: null, data: result } as const, 201);
+			const { text, locationLabel, imageKey, meanings, autoComplete, completionPrompt } = c.req.valid("json");
+			const userId = c.get("userId");
+
+			// 補完ONかつ空欄がある場合のみ pending にして裏で補完する。
+			const shouldComplete = autoComplete && hasEmptyCompletionFields(meanings);
+			let completionStatus: "pending" | "done" | "failed" = shouldComplete
+				? "pending"
+				: "done";
+
+			const result = await createWord(
+				c.get("db"),
+				userId,
+				setId,
+				{ text, locationLabel, imageKey },
+				meanings,
+				{ completionStatus },
+			);
+
+			if (shouldComplete) {
+				try {
+					await c.env.WORD_COMPLETION_QUEUE.send({
+						wordId: result.id,
+						userId,
+						wordSetId: setId,
+						lang: "ja",
+						prompt: completionPrompt ?? null,
+					});
+				} catch (err) {
+					// enqueue 失敗時は pending のまま残さず failed にする（再補完で回収可能）。
+					console.error("failed to enqueue word completion", result.id, err);
+					await failWordCompletion(c.get("db"), result.id);
+					completionStatus = "failed";
+				}
+			}
+
+			return c.json(
+				{ error: null, data: { id: result.id, completionStatus } },
+				201,
+			);
 		}
 	)
 	// 単語更新

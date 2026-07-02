@@ -4,6 +4,7 @@ import { createMiddleware } from "hono/factory";
 import { createDb } from "./db";
 import getAuth from "./lib/auth/auth";
 import { RedisParams } from "./lib/redis/redis";
+import { handleWordCompletionQueue } from "./modules/ai/completion";
 import { handlePolarWebhook } from "./polar";
 import { Bindings, WordsRouteVariables } from "./types";
 import words from "./routes/words";
@@ -101,5 +102,11 @@ app.get("/health", (c) => {
 	return c.json({ status: "ok" });
 });
 
-export default app;
+// fetch(HTTP) と queue(AI補完 consumer) を1つのWorkerでエクスポートする。
+// AppType は typeof routes を維持するので RPC 型は壊れない。
+// （Hono と workers-types の Request/Response 型差を避けるため satisfies は付けない）
+export default {
+	fetch: app.fetch,
+	queue: handleWordCompletionQueue,
+};
 export type AppType = typeof routes;

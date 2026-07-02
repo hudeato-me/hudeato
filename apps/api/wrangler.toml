@@ -10,3 +10,14 @@ ENVIRONMENT = "development"
 [[r2_buckets]]
 binding = "IMAGES_BUCKET"
 bucket_name = "hudeato-dev-images"
+
+# AI補完ジョブのキュー。producer は API、consumer は同一Workerの queue ハンドラ。
+[[queues.producers]]
+binding = "WORD_COMPLETION_QUEUE"
+queue = "word-completion"
+
+[[queues.consumers]]
+queue = "word-completion"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 3

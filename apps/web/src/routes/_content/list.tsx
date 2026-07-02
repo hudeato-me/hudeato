@@ -38,7 +38,7 @@ function WordsPage() {
             // 検索欄に文字が入っていたら
             if (normalizedQuery) {
                 // 単語、意味、複数の意味を小文字に変換
-                const searchTarget = `${word.text} ${word.meaning || ''} ${word.meanings?.[0]?.meaning || ''}`.toLowerCase()
+                const searchTarget = `${word.text} ${word.meanings?.map((m) => m.meaning).join(' ') ?? ''}`.toLowerCase()
                 // 検索欄の文字が含まれていなかったら除外
                 if (!searchTarget.includes(normalizedQuery)) {
                     return false
@@ -84,7 +84,7 @@ function WordsPage() {
                     <div className="text-sm text-black/45 px-1">該当する単語がありません</div>
                 ) : (
                     filteredWords.map((word: Word) => {
-                        const mainMeaning = word.meanings?.[0]?.meaning || word.meaning || '意味未登録'
+                        const mainMeaning = word.meanings?.[0]?.meaning || '意味未登録'
                         const partOfSpeech = word.meanings?.[0]?.partOfSpeech
 
                         return (

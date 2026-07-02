@@ -1,0 +1,1 @@
+ALTER TABLE `word` ADD `completion_status` text DEFAULT 'done' NOT NULL;

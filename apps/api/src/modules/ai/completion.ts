@@ -4,12 +4,17 @@ import { createDb } from "../../db";
 import { getRedis } from "../../lib/redis/redis";
 import type { Bindings } from "../../types";
 import type { Db } from "../../types/words-route-type";
+import { upsertWordEmbedding } from "../study/repository";
 import {
 	readMeaningCache,
 	writeMeaningCache,
 	type MeaningCacheClient,
 } from "./cache";
-import { generateWordCompletion } from "./gemini";
+import {
+	GEMINI_EMBEDDING_MODEL,
+	generateEmbedding,
+	generateWordCompletion,
+} from "./gemini";
 import {
 	applyWordCompletion,
 	findWordForCompletion,
@@ -170,7 +175,48 @@ export const completeWord = async (
 
 	const merged = mergeEmptyFields(target.meanings, generated);
 	await applyWordCompletion(db, msg.wordId, merged);
-	// TODO(P1-5): word_embedding の生成
+};
+
+// 埋め込みの入力テキストを組み立てる（単語 + 意味）。P2の近傍検索の質を左右する。
+export const buildEmbeddingInput = (
+	wordText: string,
+	meanings: { meaning: string }[],
+): string => {
+	const joined = meanings
+		.map((m) => m.meaning)
+		.filter((s) => s.trim() !== "")
+		.join("; ");
+	return joined ? `${wordText}: ${joined}` : wordText;
+};
+
+export interface EmbeddingTarget {
+	wordId: string;
+	userId: string;
+	wordSetId: string;
+}
+
+// 補完後の埋め込み生成フック（P1-5, best-effort）。
+// 補完済みの単語+意味から埋め込みを生成し upsert する。
+// 失敗しても意味は保存済みのため補完全体は失敗させず、ログのみ残す。
+export const generateWordEmbedding = async (
+	deps: { db: Db; apiKey: string },
+	target: EmbeddingTarget,
+): Promise<void> => {
+	const { db, apiKey } = deps;
+	try {
+		const word = await findWordForCompletion(
+			db,
+			target.userId,
+			target.wordSetId,
+			target.wordId,
+		);
+		if (!word) return;
+		const input = buildEmbeddingInput(word.text, word.meanings);
+		const vector = await generateEmbedding({ apiKey, text: input });
+		await upsertWordEmbedding(db, target.wordId, vector, GEMINI_EMBEDDING_MODEL);
+	} catch (error) {
+		console.error("failed to generate word embedding", target.wordId, error);
+	}
 };
 
 // producer 側で enqueue に失敗した場合など、補完を失敗として記録する。
@@ -200,6 +246,11 @@ export const handleWordCompletionQueue = async (
 		try {
 			await completeWord(
 				{ db, apiKey: env.GEMINI_API_KEY, redis },
+				message.body,
+			);
+			// 補完成功後に埋め込みを生成（best-effort、失敗してもackする）。
+			await generateWordEmbedding(
+				{ db, apiKey: env.GEMINI_API_KEY },
 				message.body,
 			);
 			message.ack();

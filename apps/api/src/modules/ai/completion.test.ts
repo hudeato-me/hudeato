@@ -2,17 +2,25 @@ import { asc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 // gemini モジュールをモックして、生成結果を差し替えられるようにする。
-const { generateWordCompletion } = vi.hoisted(() => ({
+const { generateWordCompletion, generateEmbedding } = vi.hoisted(() => ({
 	generateWordCompletion: vi.fn(),
+	generateEmbedding: vi.fn(),
 }));
-vi.mock("./gemini", () => ({ generateWordCompletion }));
+vi.mock("./gemini", () => ({
+	generateWordCompletion,
+	generateEmbedding,
+	GEMINI_EMBEDDING_MODEL: "text-embedding-004",
+}));
 
-import { user, word, wordMeaning, wordSet } from "../../db";
+import { user, word, wordEmbedding, wordMeaning, wordSet } from "../../db";
+import { EMBEDDING_DIM } from "../../db/word-schema";
 import { createTestDb } from "../../test/helpers";
 import { createTestContext, type TestContext } from "../../test/setup";
 import { meaningCacheKey } from "./cache";
 import {
+	buildEmbeddingInput,
 	completeWord,
+	generateWordEmbedding,
 	hasEmptyCompletionFields,
 	mergeEmptyFields,
 } from "./completion";
@@ -128,8 +136,23 @@ describe("mergeEmptyFields", () => {
 	});
 });
 
+describe("buildEmbeddingInput", () => {
+	it("単語と意味を結合する", () => {
+		expect(
+			buildEmbeddingInput("ephemeral", [
+				{ meaning: "はかない" },
+				{ meaning: "つかの間の" },
+			]),
+		).toBe("ephemeral: はかない; つかの間の");
+	});
+
+	it("意味が無ければ単語のみ", () => {
+		expect(buildEmbeddingInput("ephemeral", [])).toBe("ephemeral");
+	});
+});
+
 // ---------------------------------------------------------------------------
-// completeWord（DB結合・Geminiモック）
+// completeWord / generateWordEmbedding（DB結合・Geminiモック）
 // ---------------------------------------------------------------------------
 
 describe("completeWord", () => {
@@ -354,5 +377,61 @@ describe("completeWord", () => {
 		expect(redis.store.get(meaningCacheKey("novel-word", "ja"))).toEqual([
 			{ meaning: "新出の意味" },
 		]);
+	});
+
+	it("補完済み単語の埋め込みを生成して保存する", async () => {
+		await db.insert(word).values({
+			id: "we1",
+			userId: "u1",
+			wordSetId: "s1",
+			text: "ephemeral",
+			completionStatus: "done",
+		});
+		await db.insert(wordMeaning).values({
+			id: "wem1",
+			wordId: "we1",
+			meaning: "はかない",
+			slot: 1,
+		});
+		const vec = new Array<number>(EMBEDDING_DIM).fill(0);
+		vec[0] = 1;
+		generateEmbedding.mockResolvedValue(vec);
+
+		await generateWordEmbedding(
+			{ db, apiKey: "k" },
+			{ wordId: "we1", userId: "u1", wordSetId: "s1" },
+		);
+
+		expect(generateEmbedding).toHaveBeenCalledWith(
+			expect.objectContaining({ text: expect.stringContaining("ephemeral") }),
+		);
+		const emb = await db.query.wordEmbedding.findFirst({
+			where: eq(wordEmbedding.wordId, "we1"),
+			columns: { wordId: true, model: true },
+		});
+		expect(emb?.model).toBe("text-embedding-004");
+	});
+
+	it("埋め込み生成が失敗しても例外を投げない（best-effort）", async () => {
+		await db.insert(word).values({
+			id: "we2",
+			userId: "u1",
+			wordSetId: "s1",
+			text: "x",
+			completionStatus: "done",
+		});
+		generateEmbedding.mockRejectedValue(new Error("gemini down"));
+
+		await expect(
+			generateWordEmbedding(
+				{ db, apiKey: "k" },
+				{ wordId: "we2", userId: "u1", wordSetId: "s1" },
+			),
+		).resolves.toBeUndefined();
+		const emb = await db.query.wordEmbedding.findFirst({
+			where: eq(wordEmbedding.wordId, "we2"),
+			columns: { wordId: true, model: true },
+		});
+		expect(emb).toBeUndefined();
 	});
 });

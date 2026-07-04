@@ -4,7 +4,7 @@ import { z } from "zod";
 import { Bindings, WordsRouteVariables } from "../types";
 import { getWordById, getWords, searchWordList, createWord, updateWord, removeWord } from "../modules/word/service";
 import { deleteImage } from "../modules/upload/service";
-import { completeWord, failWordCompletion, hasEmptyCompletionFields } from "../modules/ai/completion";
+import { completeWord, failWordCompletion, generateWordEmbedding, hasEmptyCompletionFields } from "../modules/ai/completion";
 import { readMeaningCache } from "../modules/ai/cache";
 import { getRedis } from "../lib/redis/redis";
 import { handleZodError } from "../utils/error-validator";
@@ -144,6 +144,18 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 							},
 						);
 						completionStatus = "done";
+
+						// 埋め込みは応答をブロックしないよう背後で生成（best-effort）。
+						const embeddingJob = generateWordEmbedding(
+							{ db: c.get("db"), apiKey: c.env.GEMINI_API_KEY },
+							{ wordId: result.id, userId, wordSetId: setId },
+						);
+						try {
+							c.executionCtx.waitUntil(embeddingJob);
+						} catch {
+							// ExecutionContext が無い環境（テスト等）ではそのまま非同期に任せる。
+							void embeddingJob;
+						}
 					} catch (err) {
 						console.error("sync completion failed", result.id, err);
 						await failWordCompletion(c.get("db"), result.id);

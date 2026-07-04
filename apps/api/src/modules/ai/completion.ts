@@ -1,5 +1,9 @@
 import type { MessageBatch } from "@cloudflare/workers-types";
-import type { GeneratedMeaning } from "@hudeato/schema";
+import {
+	COMPLETABLE_FIELDS,
+	type CompletableField,
+	type GeneratedMeaning,
+} from "@hudeato/schema";
 import { createDb } from "../../db";
 import { getRedis } from "../../lib/redis/redis";
 import type { Bindings } from "../../types";
@@ -27,6 +31,12 @@ import {
 // 空欄のみを補完し、非同期実行は Cloudflare Queues（producer=API / consumer=本Worker）。
 // ===========================================================================
 
+// 再補完で上書き対象を明示する指定（slot単位でフィールドを列挙）。
+export interface CompletionTarget {
+	slot: number;
+	fields: CompletableField[];
+}
+
 // キューに載せる補完ジョブのメッセージ。
 export interface WordCompletionMessage {
 	wordId: string;
@@ -36,19 +46,9 @@ export interface WordCompletionMessage {
 	lang: string;
 	// AIチャット欄などの補完コンテキスト。
 	prompt: string | null;
+	// 明示指定された欄だけ上書き再生成する（P1-6）。省略時は空欄のみ補完。
+	targets?: CompletionTarget[] | null;
 }
-
-// AI補完で埋めうるフィールド（source=出典 はユーザー由来のため対象外）。
-export const COMPLETABLE_FIELDS = [
-	"meaning",
-	"partOfSpeech",
-	"phonetic",
-	"example",
-	"collocation",
-	"synonym",
-	"etymology",
-] as const;
-export type CompletableField = (typeof COMPLETABLE_FIELDS)[number];
 
 const isEmpty = (v: string | null | undefined): boolean =>
 	v == null || v.trim() === "";
@@ -133,6 +133,35 @@ export const mergeEmptyFields = (
 	return { updates, inserts };
 };
 
+// 明示指定された欄だけAI出力で上書きする（P1-6 編集画面のsend用）。
+// 指定外のフィールドには一切触らない。ユーザーの明示指示なので入力済みでも上書きする。
+// 既存の意味とAI出力は slot 順のインデックスで対応づける（mergeEmptyFields と同じ規約）。
+export const mergeTargetedFields = (
+	existing: CompletionMeaningRow[],
+	generated: GeneratedMeaning[],
+	targets: CompletionTarget[],
+): MergeResult => {
+	const updates: MeaningPatch[] = [];
+	for (const target of targets) {
+		const index = existing.findIndex((m) => m.slot === target.slot);
+		if (index === -1) continue;
+		const gen = generated[index] ?? generated[0];
+		if (!gen) continue;
+		const patch: Partial<Record<CompletableField, string>> = {};
+		for (const field of target.fields) {
+			const next = gen[field];
+			if (next != null && next.trim() !== "") {
+				patch[field] = next;
+			}
+		}
+		if (Object.keys(patch).length > 0) {
+			updates.push({ id: existing[index].id, patch });
+		}
+	}
+	// 上書き再生成では新規語義の追加は行わない（対象欄の更新に限定する）。
+	return { updates, inserts: [] };
+};
+
 export interface CompleteWordDeps {
 	db: Db;
 	apiKey: string;
@@ -156,8 +185,16 @@ export const completeWord = async (
 	// 単語が削除済みなどで見つからなければ何もしない。
 	if (!target) return;
 
+	// カスタムprompt付き・上書き指定ありの生成は文脈依存のため、
+	// 共有キャッシュを読まない・書かない（グローバルキャッシュの汚染防止）。
+	const isContextual =
+		(msg.prompt != null && msg.prompt.trim() !== "") ||
+		(msg.targets != null && msg.targets.length > 0);
+
 	// 共有キャッシュにヒットすれば Gemini を呼ばずに完了させる。
-	const cached = await readMeaningCache(redis, target.text, msg.lang);
+	const cached = isContextual
+		? null
+		: await readMeaningCache(redis, target.text, msg.lang);
 	let generated: GeneratedMeaning[];
 	if (cached) {
 		generated = cached;
@@ -169,11 +206,17 @@ export const completeWord = async (
 			prompt: msg.prompt,
 		});
 		generated = result.meanings;
-		// 次のユーザーのために共有キャッシュへ保存する。
-		await writeMeaningCache(redis, target.text, msg.lang, generated);
+		if (!isContextual) {
+			// 次のユーザーのために共有キャッシュへ保存する。
+			await writeMeaningCache(redis, target.text, msg.lang, generated);
+		}
 	}
 
-	const merged = mergeEmptyFields(target.meanings, generated);
+	// 明示指定があればその欄だけ上書き、なければ空欄のみ補完する。
+	const merged =
+		msg.targets && msg.targets.length > 0
+			? mergeTargetedFields(target.meanings, generated, msg.targets)
+			: mergeEmptyFields(target.meanings, generated);
 	await applyWordCompletion(db, msg.wordId, merged);
 };
 

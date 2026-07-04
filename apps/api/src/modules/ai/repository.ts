@@ -99,3 +99,22 @@ export const markWordCompletionFailed = async (
 		.set({ completionStatus: "failed" })
 		.where(eq(word.id, wordId));
 };
+
+// 再補完の開始時に補完中(pending)へ戻す（P1-6）。所有スコープで絞る。
+export const markWordCompletionPending = async (
+	db: Db,
+	userId: string,
+	wordSetId: string,
+	wordId: string,
+): Promise<void> => {
+	await db
+		.update(word)
+		.set({ completionStatus: "pending" })
+		.where(
+			and(
+				eq(word.id, wordId),
+				eq(word.userId, userId),
+				eq(word.wordSetId, wordSetId),
+			),
+		);
+};

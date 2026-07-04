@@ -4,7 +4,9 @@ import { z } from "zod";
 import { Bindings, WordsRouteVariables } from "../types";
 import { getWordById, getWords, searchWordList, createWord, updateWord, removeWord } from "../modules/word/service";
 import { deleteImage } from "../modules/upload/service";
+import { WordRecompleteRequestSchema } from "@hudeato/schema";
 import { completeWord, failWordCompletion, generateWordEmbedding, hasEmptyCompletionFields } from "../modules/ai/completion";
+import { markWordCompletionPending } from "../modules/ai/repository";
 import { readMeaningCache } from "../modules/ai/cache";
 import { getRedis } from "../lib/redis/redis";
 import { handleZodError } from "../utils/error-validator";
@@ -127,7 +129,11 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 
 			if (shouldComplete) {
 				const redis = getRedis(c.get("redisParams"));
-				const cached = await readMeaningCache(redis, text, "ja");
+				// カスタムprompt付きは文脈依存の生成になるため共有キャッシュを使わず必ずキューに載せる。
+				const hasPrompt = !!completionPrompt?.trim();
+				const cached = hasPrompt
+					? null
+					: await readMeaningCache(redis, text, "ja");
 
 				if (cached) {
 					// 既知語（キャッシュヒット）: AIを呼ばず同期で補完して即done。
@@ -196,6 +202,49 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 			const { text, locationLabel, imageKey, meanings } = c.req.valid("json");
 			await updateWord(c.get("db"), c.get("userId"), setId, wordId, { text, locationLabel, imageKey }, meanings);
 			return c.json({ error: null, data: { success: true } } as const);
+		}
+	)
+	// チャット文脈つき再補完（編集画面のsend / failedのリトライ）
+	// targets指定時はその欄だけ上書き再生成、省略時は空欄のみ補完する。
+	.post(
+		"/:wordId/complete",
+		zValidator("param", z.object({ setId: z.string(), wordId: z.string() }), handleZodError),
+		zValidator("json", WordRecompleteRequestSchema, handleZodError),
+		async (c) => {
+			const { setId, wordId } = c.req.valid("param");
+			const { prompt, targets } = c.req.valid("json");
+			const db = c.get("db");
+			const userId = c.get("userId");
+
+			// 所有スコープで対象を確認する。
+			const target = await getWordById(db, userId, setId, wordId);
+			if (!target) {
+				return c.json({ error: "Not Found", data: null } as const, 404);
+			}
+
+			// 補完中表示に切り替えてからキューに載せる。
+			await markWordCompletionPending(db, userId, setId, wordId);
+			let completionStatus: "pending" | "failed" = "pending";
+			try {
+				await c.env.WORD_COMPLETION_QUEUE.send({
+					wordId,
+					userId,
+					wordSetId: setId,
+					lang: "ja",
+					prompt: prompt ?? null,
+					targets: targets ?? null,
+				});
+			} catch (err) {
+				// enqueue 失敗時は pending のまま残さず failed にする。
+				console.error("failed to enqueue word recompletion", wordId, err);
+				await failWordCompletion(db, wordId);
+				completionStatus = "failed";
+			}
+
+			return c.json(
+				{ error: null, data: { id: wordId, completionStatus } },
+				202,
+			);
 		}
 	)
 	// 単語削除

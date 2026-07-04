@@ -23,6 +23,7 @@ import {
 	generateWordEmbedding,
 	hasEmptyCompletionFields,
 	mergeEmptyFields,
+	mergeTargetedFields,
 } from "./completion";
 import type { CompletionMeaningRow } from "./repository";
 
@@ -133,6 +134,56 @@ describe("mergeEmptyFields", () => {
 		const { inserts } = mergeEmptyFields([], generated);
 		expect(inserts).toHaveLength(5);
 		expect(inserts[4].slot).toBe(5);
+	});
+});
+
+describe("mergeTargetedFields", () => {
+	const row = (over: Partial<CompletionMeaningRow>): CompletionMeaningRow => ({
+		id: "m1",
+		slot: 1,
+		meaning: "",
+		partOfSpeech: null,
+		phonetic: null,
+		example: null,
+		collocation: null,
+		synonym: null,
+		etymology: null,
+		...over,
+	});
+
+	it("指定した欄は入力済みでも上書きし、指定外には触らない", () => {
+		const existing = [
+			row({ id: "m1", slot: 1, meaning: "古い意味", example: "古い例文" }),
+		];
+		const generated = [
+			{ meaning: "新しい意味", example: "新しい例文", synonym: "syn" },
+		];
+		const { updates, inserts } = mergeTargetedFields(existing, generated, [
+			{ slot: 1, fields: ["example"] },
+		]);
+		expect(inserts).toHaveLength(0);
+		expect(updates).toEqual([
+			{ id: "m1", patch: { example: "新しい例文" } },
+		]);
+	});
+
+	it("存在しないslotの指定やAI出力が空の欄はスキップする", () => {
+		const existing = [row({ id: "m1", slot: 1, meaning: "意味" })];
+		const generated = [{ meaning: "新", example: null }];
+		const { updates } = mergeTargetedFields(existing, generated, [
+			{ slot: 3, fields: ["meaning"] }, // slot 3 は存在しない
+			{ slot: 1, fields: ["example"] }, // AI出力が null
+		]);
+		expect(updates).toHaveLength(0);
+	});
+
+	it("新規語義の追加は行わない", () => {
+		const existing = [row({ id: "m1", slot: 1, meaning: "意味" })];
+		const generated = [{ meaning: "a" }, { meaning: "b" }, { meaning: "c" }];
+		const { inserts } = mergeTargetedFields(existing, generated, [
+			{ slot: 1, fields: ["meaning"] },
+		]);
+		expect(inserts).toHaveLength(0);
 	});
 });
 
@@ -377,6 +428,85 @@ describe("completeWord", () => {
 		expect(redis.store.get(meaningCacheKey("novel-word", "ja"))).toEqual([
 			{ meaning: "新出の意味" },
 		]);
+	});
+
+	it("カスタムprompt付きは共有キャッシュを読まず・書かず生成する", async () => {
+		await db.insert(word).values({
+			id: "w-ctx",
+			userId: "u1",
+			wordSetId: "s1",
+			text: "context-word",
+			completionStatus: "pending",
+		});
+		// キャッシュにヒットする状態でも prompt があれば無視する
+		redis.store.set(meaningCacheKey("context-word", "ja"), [
+			{ meaning: "キャッシュ意味" },
+		]);
+		generateWordCompletion.mockResolvedValue({
+			meanings: [{ meaning: "文脈付きの意味" }],
+		});
+
+		await completeWord(
+			{ db, apiKey: "k", redis },
+			{
+				wordId: "w-ctx",
+				userId: "u1",
+				wordSetId: "s1",
+				lang: "ja",
+				prompt: "医学の文脈で",
+			},
+		);
+
+		expect(generateWordCompletion).toHaveBeenCalledTimes(1);
+		// キャッシュは上書きされていない（文脈依存の出力で汚染しない）
+		expect(redis.store.get(meaningCacheKey("context-word", "ja"))).toEqual([
+			{ meaning: "キャッシュ意味" },
+		]);
+		const ms = await db.query.wordMeaning.findMany({
+			where: eq(wordMeaning.wordId, "w-ctx"),
+		});
+		expect(ms.map((m) => m.meaning)).toEqual(["文脈付きの意味"]);
+	});
+
+	it("targets指定時は入力済みの欄も上書き再生成する", async () => {
+		await db.insert(word).values({
+			id: "w-target",
+			userId: "u1",
+			wordSetId: "s1",
+			text: "bank",
+			completionStatus: "pending",
+		});
+		await db.insert(wordMeaning).values({
+			id: "wm-target",
+			wordId: "w-target",
+			meaning: "銀行",
+			example: "古い例文",
+			slot: 1,
+		});
+		generateWordCompletion.mockResolvedValue({
+			meanings: [{ meaning: "土手", example: "川辺の例文" }],
+		});
+
+		await completeWord(
+			{ db, apiKey: "k", redis },
+			{
+				wordId: "w-target",
+				userId: "u1",
+				wordSetId: "s1",
+				lang: "ja",
+				prompt: "川辺の文脈で",
+				targets: [{ slot: 1, fields: ["meaning", "example"] }],
+			},
+		);
+
+		const m = await db.query.wordMeaning.findFirst({
+			where: eq(wordMeaning.id, "wm-target"),
+		});
+		// 指定した欄は入力済みでも上書き
+		expect(m?.meaning).toBe("土手");
+		expect(m?.example).toBe("川辺の例文");
+		const w = await db.query.word.findFirst({ where: eq(word.id, "w-target") });
+		expect(w?.completionStatus).toBe("done");
 	});
 
 	it("補完済み単語の埋め込みを生成して保存する", async () => {

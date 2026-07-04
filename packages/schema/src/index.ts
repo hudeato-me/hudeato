@@ -115,3 +115,32 @@ export const WordCompletionResultSchema = z.object({
 	meanings: z.array(GeneratedMeaningSchema).min(1),
 });
 export type WordCompletionResult = z.infer<typeof WordCompletionResultSchema>;
+
+// AI補完で埋めうるフィールド（source=出典 はユーザー由来のため対象外）。
+export const CompletableFieldSchema = z.enum([
+	"meaning",
+	"partOfSpeech",
+	"phonetic",
+	"example",
+	"collocation",
+	"synonym",
+	"etymology",
+]);
+export type CompletableField = z.infer<typeof CompletableFieldSchema>;
+export const COMPLETABLE_FIELDS = CompletableFieldSchema.options;
+
+// POST /words/:setId/:wordId/complete のリクエスト（チャット文脈つき再補完）。
+// targets を明示指定した欄だけ上書き再生成する。省略時は空欄のみ補完。
+export const WordRecompleteRequestSchema = z.object({
+	prompt: z.string().nullish(),
+	targets: z
+		.array(
+			z.object({
+				slot: z.number().int().min(1).max(5),
+				fields: z.array(CompletableFieldSchema).min(1),
+			}),
+		)
+		.min(1)
+		.optional(),
+});
+export type WordRecompleteRequest = z.infer<typeof WordRecompleteRequestSchema>;

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo, useState } from 'react';
+import React, { useRef, useEffect, useMemo, useState, useCallback } from 'react';
 import { useWord, useWordSets, useCreateWord, useUpdateWord, useCompleteWord } from '~/hooks/use-words';
 import { useWordEntryForm } from '~/hooks/word-entry/useWordEntryForm';
 import { useWordAutoSave } from '~/hooks/word-entry/useWordAutoSave';
@@ -36,11 +36,14 @@ function MeaningFields({
     idx,
     updateMeaning,
     fieldOrder,
+    isAiCompleting = false,
 }: {
     item: Record<string, any>;
     idx: number;
     updateMeaning: (index: number, field: string, value: string) => void;
     fieldOrder: string[];
+    // AI補完中は空欄フィールドをシマー表示にする（入力は妨げない）
+    isAiCompleting?: boolean;
 }) {
     const elements: React.ReactNode[] = [];
     let i = 0;
@@ -49,15 +52,25 @@ function MeaningFields({
         const config = FIELD_CONFIG[key];
         if (!config) { i++; continue; }
 
+        // AI補完の対象（=空欄）だけをシマー表示。source はAI補完対象外
+        const isCompletionTarget =
+            isAiCompleting &&
+            config.fieldName !== 'source' &&
+            !String(item[config.fieldName] ?? '').trim();
+        const fieldClass = isCompletionTarget
+            ? 'animate-pulse bg-blue-50/60 border-blue-200 placeholder:text-blue-400'
+            : 'bg-white border-gray-200';
+        const placeholder = isCompletionTarget ? 'AIが補完中...' : config.placeholder;
+
         if (config.type === 'textarea') {
             elements.push(
                 <div key={key} className="space-y-1.5">
                     <label className="text-gray-400 text-xs ml-1">{config.label}</label>
                     <textarea
-                        placeholder={config.placeholder}
+                        placeholder={placeholder}
                         value={item[config.fieldName] ?? ''}
                         onChange={(e) => updateMeaning(idx, config.fieldName, e.target.value)}
-                        className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3 outline-none focus:border-blue-400 transition-all min-h-[80px]"
+                        className={`w-full border rounded-2xl px-4 py-3 outline-none focus:border-blue-400 transition-all min-h-[80px] ${fieldClass}`}
                     />
                 </div>
             );
@@ -67,10 +80,10 @@ function MeaningFields({
                     <label className="text-gray-400 text-xs ml-1">{config.label}</label>
                     <input
                         type="text"
-                        placeholder={config.placeholder}
+                        placeholder={placeholder}
                         value={item[config.fieldName] ?? ''}
                         onChange={(e) => updateMeaning(idx, config.fieldName, e.target.value)}
-                        className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3 outline-none focus:border-blue-400 transition-all"
+                        className={`w-full border rounded-2xl px-4 py-3 outline-none focus:border-blue-400 transition-all ${fieldClass}`}
                     />
                 </div>
             );
@@ -119,6 +132,24 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         buildPayload
     } = useWordEntryForm();
 
+    // ==== AI補完の状態（P1-7/P1-8） ====
+    // 生成中もユーザーを画面に閉じ込めない。閉じれば一覧のバッジに引き継ぎ、
+    // 開いたままなら空欄シマー→完了でその場に反映する。
+    const [completionPrompt, setCompletionPrompt] = useState('');
+    const [isRequestingAi, setIsRequestingAi] = useState(false);
+    const [aiError, setAiError] = useState(false);
+    // オートセーブに渡すペイロード生成を切り替えるためのRef（フック順序の都合でRef経由）
+    const isAiActiveRef = useRef(false);
+
+    // AI補完が進行中の間は、空欄を「意味なし」で潰さず保存する
+    // （潰すとサーバの「空欄のみ補完」が対象を見失うため）
+    const buildSavePayload = useCallback(() => {
+        if (isAiActiveRef.current) {
+            return { ...buildPayload({ preserveBlanks: true }), autoComplete: true };
+        }
+        return buildPayload();
+    }, [buildPayload]);
+
     // ==== オートセーブ・API通信管理 ====
     const {
         effectiveWordId,
@@ -128,6 +159,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         setCreatedWordId,
         lastSavedData,
         handleClose,
+        cancelPendingSave,
         deleteWord
     } = useWordAutoSave({
         wordSetId,
@@ -136,7 +168,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         word,
         meanings,
         locationLabel,
-        buildPayload,
+        buildPayload: buildSavePayload,
         onClose,
         setWord,
     });
@@ -181,51 +213,147 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         isOpen && !!wordSetId && !!effectiveWordId
     );
 
-    // ==== AI補完（P1-7） ====
-    // 下部のプロンプト入力とAI補完ボタン。空欄をAIが埋める登録を行う。
-    const [completionPrompt, setCompletionPrompt] = useState('');
-    const [isCompleting, setIsCompleting] = useState(false);
+    // ==== AI補完のキック（P1-7/P1-8） ====
     const { mutateAsync: createWordWithAi } = useCreateWord(wordSetId ?? '');
     const { mutateAsync: updateWordForAi } = useUpdateWord(wordSetId ?? '');
     const { mutateAsync: requestCompletion } = useCompleteWord(wordSetId ?? '');
 
+    // サーバ側の補完ステータス（ポーリングで更新される）
+    const serverCompletionStatus = existingData?.data?.completionStatus;
+    // リクエスト直後〜サーバがpendingを返すまでの隙間も含めて「補完中」を表す
+    const isAiActive = isRequestingAi || serverCompletionStatus === 'pending';
+    isAiActiveRef.current = isAiActive;
+
     const handleAiComplete = () => {
-        if (!wordSetId || !word.trim() || isCompleting) return;
-        setIsCompleting(true);
+        if (!wordSetId || !word.trim() || isAiActive) return;
         haptic('success');
+        setIsRequestingAi(true);
+        setAiError(false);
+        // 進行中のデバウンス保存をキャンセル（キック側の保存と二重にならないように）
+        cancelPendingSave();
 
         const prompt = completionPrompt.trim() || null;
-        // 空欄を「意味なし」で埋めず保持する（サーバの空欄のみ補完を効かせる）
+        // 空欄を保持して送る（サーバの「空欄のみ補完」の対象にするため）
         const aiPayload = {
             ...buildPayload({ preserveBlanks: true }),
             autoComplete: true,
             completionPrompt: prompt,
         };
-        // 以降のオートセーブ/閉時保存が「意味なし」で上書きしないよう保存済み扱いにする
-        lastSavedData.current = JSON.stringify(buildPayload());
+        // 以降のオートセーブ/閉時保存が重複しないよう、AI形状の文字列で保存済み扱いにする
+        lastSavedData.current = JSON.stringify({
+            ...buildPayload({ preserveBlanks: true }),
+            autoComplete: true,
+        });
 
-        // オートセーブで既に作成済みなら現在の内容を空欄のまま保存→再補完をキック。
-        // 未作成なら補完ONで新規作成（サーバ側でpending→キュー投入）。
-        const job = effectiveWordId
-            ? updateWordForAi({ wordId: effectiveWordId, data: aiPayload }).then(() =>
-                requestCompletion({ wordId: effectiveWordId, data: { prompt } })
-            )
-            : createWordWithAi(aiPayload);
-        job.catch(console.error).finally(() => setIsCompleting(false));
-
-        // 待たせない: 即座に閉じて一覧の「AI補完中」表示に引き継ぐ
-        onClose();
+        // 閉じない: ユーザーはこのまま結果を見てもいいし、いつ閉じてもいい。
+        // 閉じた場合は一覧の「AI補完中」バッジ＋ポーリングが引き継ぐ。
+        const kick = async () => {
+            if (effectiveWordId) {
+                // オートセーブで作成済み → 現在の内容を空欄のまま保存して再補完をキック
+                await updateWordForAi({ wordId: effectiveWordId, data: aiPayload });
+                const res = await requestCompletion({ wordId: effectiveWordId, data: { prompt } });
+                if (res.data?.completionStatus === 'failed') setAiError(true);
+            } else {
+                // 未作成 → 補完ONで新規作成（サーバ側でpending→キュー投入）
+                const res = await createWordWithAi(aiPayload);
+                if (res.data?.id) setCreatedWordId(res.data.id);
+                if (res.data?.completionStatus === 'failed') setAiError(true);
+                // 共有キャッシュヒットで即doneの場合、pending遷移が観測されないため
+                // prevをpending扱いにして初回フェッチ(done)で反映エフェクトを発火させる
+                if (res.data?.completionStatus === 'done') {
+                    prevCompletionStatusRef.current = 'pending';
+                }
+            }
+        };
+        kick()
+            .catch((err) => {
+                console.error('AI completion request failed:', err);
+                setAiError(true);
+            })
+            .finally(() => setIsRequestingAi(false));
     };
+
+    // ==== AI補完の完了をその場に反映（P1-8） ====
+    // pending→done を検知したら、フォームの空欄にだけAI結果を流し込む（入力済みはユーザー優先）。
+    const prevCompletionStatusRef = useRef<string | undefined>(undefined);
+    useEffect(() => {
+        const prev = prevCompletionStatusRef.current;
+        prevCompletionStatusRef.current = serverCompletionStatus;
+        if (!isOpen || prev !== 'pending') return;
+
+        if (serverCompletionStatus === 'done' && existingData?.data) {
+            const serverMeanings = existingData.data.meanings ?? [];
+            setMeanings((prevMeanings) => {
+                const merged = prevMeanings.map((m, idx) => {
+                    const sm = serverMeanings[idx];
+                    if (!sm) return m;
+                    return {
+                        ...m,
+                        meaning: m.meaning || sm.meaning || '',
+                        partOfSpeech: m.partOfSpeech || sm.partOfSpeech || '',
+                        phonetic: m.phonetic || sm.phonetic || '',
+                        example: m.example || sm.example || '',
+                        collocation: m.collocation || sm.collocation || '',
+                        synonym: m.synonym || sm.synonym || '',
+                        etymology: m.etymology || sm.etymology || '',
+                    };
+                });
+                // AIが語義を追加した場合はフォームにも追加する
+                for (let i = prevMeanings.length; i < serverMeanings.length; i++) {
+                    const sm = serverMeanings[i];
+                    merged.push({
+                        id: Date.now() + i,
+                        meaning: sm.meaning ?? '',
+                        partOfSpeech: sm.partOfSpeech ?? '',
+                        phonetic: sm.phonetic ?? '',
+                        example: sm.example ?? '',
+                        collocation: sm.collocation ?? '',
+                        synonym: sm.synonym ?? '',
+                        etymology: sm.etymology ?? '',
+                        source: sm.source ?? '',
+                    });
+                }
+                // 反映後の状態を保存済み扱いにして、オートセーブの往復を防ぐ
+                // （init処理と同じく、buildPayloadの形を再現して比較文字列を先に揃える）
+                lastSavedData.current = JSON.stringify({
+                    text: word,
+                    locationLabel: locationLabel || null,
+                    imageKey: imageKey,
+                    meanings: merged.map((m, idx) => ({
+                        meaning: m.meaning || '意味なし',
+                        partOfSpeech: m.partOfSpeech || null,
+                        phonetic: m.phonetic || null,
+                        example: m.example || null,
+                        collocation: m.collocation || null,
+                        synonym: m.synonym || null,
+                        etymology: m.etymology || null,
+                        source: m.source || null,
+                        slot: idx + 1,
+                    })),
+                });
+                return merged;
+            });
+            haptic('success');
+        } else if (serverCompletionStatus === 'failed') {
+            setAiError(true);
+            haptic('medium');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [serverCompletionStatus, isOpen]);
 
     // ドロワー内の縦スクロール位置を管理するRef
     const mainContentRef = useRef<HTMLDivElement>(null);
     // Meaningタブ内の横スクロール位置を管理するRef
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    // フォーム初期化を開いている間に1回だけ行うためのRef
+    // （補完ポーリングでexistingDataが更新されるたびに入力を上書きしないため）
+    const hasInitializedRef = useRef(false);
 
     // ドロワー開いたときの初期化
     useEffect(() => {
-        // 既存単語のデータがある場合、それをセットする
-        if (existingWordId && existingData?.data) {
+        // 既存単語のデータがある場合、それをセットする（開いている間は1回だけ）
+        if (existingWordId && existingData?.data && !hasInitializedRef.current) {
+            hasInitializedRef.current = true;
             const data = existingData.data;
             setWord(data.text);
             setLocationLabel(data.locationLabel ?? '');
@@ -309,8 +437,11 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
             mainContentRef.current?.scrollTo(0, 0);
             scrollContainerRef.current?.scrollTo(0, 0);
             setActiveTab(0);
-            // AI補完のプロンプトをリセット
+            // AI補完まわりの状態をリセット
             setCompletionPrompt('');
+            setAiError(false);
+            hasInitializedRef.current = false;
+            prevCompletionStatusRef.current = undefined;
         }
     }, [isOpen]);
 
@@ -603,6 +734,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
                                                 idx={idx}
                                                 updateMeaning={updateMeaning}
                                                 fieldOrder={fieldOrder}
+                                                isAiCompleting={isAiActive}
                                             />
                                         </div>
                                     </div>
@@ -644,33 +776,52 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
                     </div>
                 </div>
 
-                {/* 下部のAI補完エリア: プロンプト(任意)を添えて空欄をAIに補完させる */}
-                <div className="absolute bottom-0 left-0 w-full p-4 bg-white border-t border-gray-100 flex items-center gap-2 px-5 pb-6">
-                    <input
-                        type="text"
-                        placeholder="AIへの指示（例: 医学の文脈で）"
-                        value={completionPrompt}
-                        onChange={(e) => setCompletionPrompt(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                                handleAiComplete();
-                            }
-                        }}
-                        className="flex-1 bg-white border border-gray-200 shadow-sm rounded-full px-5 py-3 outline-none text-sm focus:border-blue-400 transition-colors"
-                    />
-                    <button
-                        onClick={handleAiComplete}
-                        disabled={!word.trim() || isCompleting}
-                        aria-label="AIで空欄を補完"
-                        className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 transition-all active:scale-90 ${word.trim() && !isCompleting
-                            ? 'bg-black text-white shadow-md'
-                            : 'bg-gray-100 text-gray-300'
-                            }`}
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-                            <path d="M12 3L14.5 9.5L21 12L14.5 14.5L12 21L9.5 14.5L3 12L9.5 9.5L12 3Z" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    </button>
+                {/* 下部のAI補完エリア: プロンプト(任意)を添えて空欄をAIに補完させる。
+                    補完中も閉じるのは自由（閉じたら一覧のバッジ＋ポーリングが引き継ぐ） */}
+                <div className="absolute bottom-0 left-0 w-full bg-white border-t border-gray-100 px-5 pb-6 pt-3 z-20">
+                    {/* 補完中/失敗のステータス表示 */}
+                    {isAiActive && (
+                        <div className="flex items-center gap-1.5 text-xs text-blue-500 pb-2 pl-2 animate-pulse select-none">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
+                                <path d="M12 3L14.5 9.5L21 12L14.5 14.5L12 21L9.5 14.5L3 12L9.5 9.5L12 3Z" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            AIが空欄を補完中... このまま閉じてもOK
+                        </div>
+                    )}
+                    {aiError && !isAiActive && (
+                        <div className="text-xs text-red-500 pb-2 pl-2 select-none">
+                            補完に失敗しました。もう一度お試しください
+                        </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="text"
+                            placeholder="AIへの指示（例: 医学の文脈で）"
+                            value={completionPrompt}
+                            onChange={(e) => setCompletionPrompt(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                                    handleAiComplete();
+                                }
+                            }}
+                            className="flex-1 bg-white border border-gray-200 shadow-sm rounded-full px-5 py-3 outline-none text-sm focus:border-blue-400 transition-colors"
+                        />
+                        <button
+                            onClick={handleAiComplete}
+                            disabled={!word.trim() || isAiActive}
+                            aria-label="AIで空欄を補完"
+                            className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 transition-all active:scale-90 ${isAiActive
+                                ? 'bg-blue-500 text-white animate-pulse'
+                                : word.trim()
+                                    ? 'bg-black text-white shadow-md'
+                                    : 'bg-gray-100 text-gray-300'
+                                }`}
+                        >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                                <path d="M12 3L14.5 9.5L21 12L14.5 14.5L12 21L9.5 14.5L3 12L9.5 9.5L12 3Z" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
 
             </div>

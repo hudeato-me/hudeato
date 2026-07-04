@@ -143,6 +143,16 @@ export function useWordAutoSave({
         }
     }, [onClose, wordSetId, word, buildPayload, effectiveWordId, updateWordAsync, createWordAsync]);
 
+    // 進行中のデバウンス保存をキャンセルする
+    // （AI補完のキック直前に呼び、キック側の保存とタイマー保存の二重実行を防ぐ）
+    const cancelPendingSave = useCallback(() => {
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+            debounceTimerRef.current = null;
+        }
+        setIsSaving(false);
+    }, []);
+
     // 削除のAPI呼び出し部分のみを担当（アニメーション制御は呼び出し元で行う）
     const deleteWord = useCallback(async () => {
         // 単語か単語セットのIDが無い場合はスキップ
@@ -170,6 +180,7 @@ export function useWordAutoSave({
         setCreatedWordId,
         lastSavedData,
         handleClose,
+        cancelPendingSave,
         deleteWord
     };
 }

@@ -65,6 +65,11 @@ export const useWord = (wordSetId: string, wordId: string, enabled = true) => {
 		},
 		enabled: enabled && !!wordId && !!wordSetId,
 		staleTime: CACHE_STALE_TIME,
+		// AI補完中(pending)の間だけ2秒間隔でポーリングし、開いたままの編集画面に完了を反映する
+		refetchInterval: (query) => {
+			const status = query.state.data?.data?.completionStatus;
+			return status === "pending" ? 2000 : false;
+		},
 		// placeholderDataで表示は即座に行ないつつ、バックグラウンドでfetchして、fetch後画面を更新する
 		placeholderData: () => {
 			// wordSetIdの全件リストから探す

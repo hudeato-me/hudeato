@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { client } from "~/lib/api-client";
-import { Word, CreateWordReq, UpdateWordReq, CreateWordSetReq, UpdateWordSetReq } from "~/types";
+import { Word, CreateWordReq, UpdateWordReq, CompleteWordReq, CreateWordSetReq, UpdateWordSetReq } from "~/types";
 
 const CACHE_STALE_TIME = 5 * 60 * 1000;
 
@@ -37,6 +37,14 @@ export const useWords = (wordSetId: string, enabled = true) =>
 		},
 		enabled: enabled && !!wordSetId,
 		staleTime: CACHE_STALE_TIME,
+		// AI補完中(pending)の単語がある間だけ2秒間隔でポーリングし、完了を反映する
+		refetchInterval: (query) => {
+			const words = query.state.data;
+			const hasPending =
+				Array.isArray(words) &&
+				words.some((w) => w.completionStatus === "pending");
+			return hasPending ? 2000 : false;
+		},
 	});
 
 // 単語詳細情報の取得
@@ -215,6 +223,30 @@ export const useUpdateWord = (wordSetId: string) => {
 			queryClient.invalidateQueries({ queryKey: wordKeys.bySet(wordSetId) });
 			queryClient.invalidateQueries({ queryKey: wordKeys.dashboard(wordSetId) });
 			queryClient.invalidateQueries({ queryKey: wordSetKeys.all });
+		},
+	});
+};
+
+// AI補完のキック（チャット文脈つき再補完 POST /:wordId/complete）
+// targets省略時は空欄のみ補完、targets指定時はその欄だけ上書き再生成
+export const useCompleteWord = (wordSetId: string) => {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async ({ wordId, data }: { wordId: string; data: CompleteWordReq }) => {
+			const res = await client.api.v1.sets[":setId"].words[":wordId"].complete.$post({
+				param: { setId: wordSetId, wordId },
+				json: data,
+			});
+			if (!res.ok) {
+				const err = await res.json() as { error?: string };
+				throw new Error(err.error ?? `API Error: ${res.status}`);
+			}
+			return res.json();
+		},
+		onSuccess: (_, { wordId }) => {
+			// pending表示に切り替わるよう即時再取得（一覧のポーリングが引き継ぐ）
+			queryClient.invalidateQueries({ queryKey: wordKeys.single(wordId) });
+			queryClient.invalidateQueries({ queryKey: wordKeys.bySet(wordSetId) });
 		},
 	});
 };

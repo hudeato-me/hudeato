@@ -13,6 +13,8 @@ export type WordWithDetails = InferResponseType<typeof client.api.v1.sets[":setI
 
 export type CreateWordReq = InferRequestType<typeof client.api.v1.sets[":setId"]["words"]["$post"]>["json"]
 export type UpdateWordReq = InferRequestType<typeof client.api.v1.sets[":setId"]["words"][":wordId"]["$put"]>["json"]
+// AI再補完 (POST /api/v1/sets/:setId/words/:wordId/complete)
+export type CompleteWordReq = InferRequestType<typeof client.api.v1.sets[":setId"]["words"][":wordId"]["complete"]["$post"]>["json"]
 export type CreateWordSetReq = InferRequestType<typeof client.api.v1.sets["$post"]>["json"]
 export type UpdateWordSetReq = InferRequestType<typeof client.api.v1.sets[":setId"]["$put"]>["json"]
 

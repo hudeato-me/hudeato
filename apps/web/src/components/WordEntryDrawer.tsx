@@ -1,5 +1,5 @@
-import React, { useRef, useEffect, useMemo } from 'react';
-import { useWord, useWordSets } from '~/hooks/use-words';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
+import { useWord, useWordSets, useCreateWord, useUpdateWord, useCompleteWord } from '~/hooks/use-words';
 import { useWordEntryForm } from '~/hooks/word-entry/useWordEntryForm';
 import { useWordAutoSave } from '~/hooks/word-entry/useWordAutoSave';
 import { useSwipeToClose } from '~/hooks/word-entry/useSwipeToClose';
@@ -181,6 +181,42 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         isOpen && !!wordSetId && !!effectiveWordId
     );
 
+    // ==== AI補完（P1-7） ====
+    // 下部のプロンプト入力とAI補完ボタン。空欄をAIが埋める登録を行う。
+    const [completionPrompt, setCompletionPrompt] = useState('');
+    const [isCompleting, setIsCompleting] = useState(false);
+    const { mutateAsync: createWordWithAi } = useCreateWord(wordSetId ?? '');
+    const { mutateAsync: updateWordForAi } = useUpdateWord(wordSetId ?? '');
+    const { mutateAsync: requestCompletion } = useCompleteWord(wordSetId ?? '');
+
+    const handleAiComplete = () => {
+        if (!wordSetId || !word.trim() || isCompleting) return;
+        setIsCompleting(true);
+        haptic('success');
+
+        const prompt = completionPrompt.trim() || null;
+        // 空欄を「意味なし」で埋めず保持する（サーバの空欄のみ補完を効かせる）
+        const aiPayload = {
+            ...buildPayload({ preserveBlanks: true }),
+            autoComplete: true,
+            completionPrompt: prompt,
+        };
+        // 以降のオートセーブ/閉時保存が「意味なし」で上書きしないよう保存済み扱いにする
+        lastSavedData.current = JSON.stringify(buildPayload());
+
+        // オートセーブで既に作成済みなら現在の内容を空欄のまま保存→再補完をキック。
+        // 未作成なら補完ONで新規作成（サーバ側でpending→キュー投入）。
+        const job = effectiveWordId
+            ? updateWordForAi({ wordId: effectiveWordId, data: aiPayload }).then(() =>
+                requestCompletion({ wordId: effectiveWordId, data: { prompt } })
+            )
+            : createWordWithAi(aiPayload);
+        job.catch(console.error).finally(() => setIsCompleting(false));
+
+        // 待たせない: 即座に閉じて一覧の「AI補完中」表示に引き継ぐ
+        onClose();
+    };
+
     // ドロワー内の縦スクロール位置を管理するRef
     const mainContentRef = useRef<HTMLDivElement>(null);
     // Meaningタブ内の横スクロール位置を管理するRef
@@ -273,6 +309,8 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
             mainContentRef.current?.scrollTo(0, 0);
             scrollContainerRef.current?.scrollTo(0, 0);
             setActiveTab(0);
+            // AI補完のプロンプトをリセット
+            setCompletionPrompt('');
         }
     }, [isOpen]);
 
@@ -606,14 +644,29 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
                     </div>
                 </div>
 
-                {/* 下部のプロンプト入力エリア */}
+                {/* 下部のAI補完エリア: プロンプト(任意)を添えて空欄をAIに補完させる */}
                 <div className="absolute bottom-0 left-0 w-full p-4 bg-white border-t border-gray-100 flex items-center gap-2 px-5 pb-6">
                     <input
                         type="text"
-                        placeholder="指示を入力"
+                        placeholder="AIへの指示（例: 医学の文脈で）"
+                        value={completionPrompt}
+                        onChange={(e) => setCompletionPrompt(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                                handleAiComplete();
+                            }
+                        }}
                         className="flex-1 bg-white border border-gray-200 shadow-sm rounded-full px-5 py-3 outline-none text-sm focus:border-blue-400 transition-colors"
                     />
-                    <button className="w-12 h-12 rounded-full bg-black text-white flex items-center justify-center shrink-0">
+                    <button
+                        onClick={handleAiComplete}
+                        disabled={!word.trim() || isCompleting}
+                        aria-label="AIで空欄を補完"
+                        className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 transition-all active:scale-90 ${word.trim() && !isCompleting
+                            ? 'bg-black text-white shadow-md'
+                            : 'bg-gray-100 text-gray-300'
+                            }`}
+                    >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
                             <path d="M12 3L14.5 9.5L21 12L14.5 14.5L12 21L9.5 14.5L3 12L9.5 9.5L12 3Z" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>

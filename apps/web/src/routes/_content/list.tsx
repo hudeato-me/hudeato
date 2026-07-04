@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react'
 import { BsSearch } from 'react-icons/bs'
 import { FilterTabs } from '~/components/FilterTabs'
 import { WordEntryDrawer } from '~/components/WordEntryDrawer'
-import { useWords } from '~/hooks/use-words'
+import { useWords, useCompleteWord } from '~/hooks/use-words'
 import { useContentContext } from '~/lib/content-context'
 import { haptic } from '~/lib/haptic'
 import type { Word } from '~/types'
@@ -20,6 +20,8 @@ function WordsPage() {
     const [editingWordId, setEditingWordId] = useState<string | null>(null)
 
     const { data: words = [], isLoading: isWordsLoading } = useWords(selectedWordSetId ?? '', !!selectedWordSetId)
+    // AI補完失敗時の再試行（空欄のみ補完）
+    const { mutate: retryCompletion } = useCompleteWord(selectedWordSetId ?? '')
 
     const [searchQuery, setSearchQuery] = useState('')
     const [filterType, setFilterType] = useState<'all' | 'mastered' | 'unmastered'>('all')
@@ -86,6 +88,8 @@ function WordsPage() {
                     filteredWords.map((word: Word) => {
                         const mainMeaning = word.meanings?.[0]?.meaning || '意味未登録'
                         const partOfSpeech = word.meanings?.[0]?.partOfSpeech
+                        const isCompleting = word.completionStatus === 'pending'
+                        const isCompletionFailed = word.completionStatus === 'failed'
 
                         return (
                             <button
@@ -108,9 +112,41 @@ function WordsPage() {
                                             </span>
                                         )}
                                     </div>
-                                    <span className="text-[14px] text-black/40 truncate leading-snug">
-                                        {mainMeaning}
-                                    </span>
+                                    {isCompleting ? (
+                                        // AI補完中: パルスするスパークルで進行中を気持ちよく見せる
+                                        <span className="flex items-center gap-1.5 text-[14px] text-blue-500/90 leading-snug animate-pulse">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5 shrink-0">
+                                                <path d="M12 3L14.5 9.5L21 12L14.5 14.5L12 21L9.5 14.5L3 12L9.5 9.5L12 3Z" strokeLinecap="round" strokeLinejoin="round" />
+                                            </svg>
+                                            AI補完中...
+                                        </span>
+                                    ) : isCompletionFailed ? (
+                                        <span className="flex items-center gap-2 text-[14px] leading-snug">
+                                            <span className="text-red-400">補完に失敗しました</span>
+                                            <span
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    haptic('medium')
+                                                    retryCompletion({ wordId: word.id, data: { prompt: null } })
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === ' ') {
+                                                        e.stopPropagation()
+                                                        retryCompletion({ wordId: word.id, data: { prompt: null } })
+                                                    }
+                                                }}
+                                                className="text-blue-500 font-medium shrink-0"
+                                            >
+                                                再試行
+                                            </span>
+                                        </span>
+                                    ) : (
+                                        <span className="text-[14px] text-black/40 truncate leading-snug">
+                                            {mainMeaning}
+                                        </span>
+                                    )}
                                 </div>
 
                                 {word.isMastered && (

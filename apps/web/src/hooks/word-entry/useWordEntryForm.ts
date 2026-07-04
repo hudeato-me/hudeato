@@ -67,13 +67,16 @@ export function useWordEntryForm() {
 
     // 現在のフォーム状態から送信用データをまとめる
     // handleclose()で呼ぶためにuseEffectの外で定義→0.8秒待たなくても閉じることが出来る
-    const buildPayload = useCallback(() => {
+    // preserveBlanks: AI補完用。空欄を「意味なし」で埋めず空のまま送る
+    // （埋めてしまうとサーバの「空欄のみ補完」が発動しなくなるため）
+    const buildPayload = useCallback((options?: { preserveBlanks?: boolean }) => {
+        const preserveBlanks = options?.preserveBlanks ?? false;
         return {
             text: word,
             locationLabel: locationLabel || null,
             imageKey: imageKey,
             meanings: meanings.map((m, idx) => ({
-                meaning: m.meaning || '意味なし',
+                meaning: preserveBlanks ? m.meaning : (m.meaning || '意味なし'),
                 partOfSpeech: m.partOfSpeech || null,
                 phonetic: m.phonetic || null,
                 example: m.example || null,

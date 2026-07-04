@@ -24,18 +24,25 @@ export const meaningCacheKey = (word: string, lang: string): string =>
 	`global:meaning:${word.trim().toLowerCase()}:${lang}`;
 
 // 共有キャッシュを読む。ヒットして形が正しければ意味配列、そうでなければ null。
+// キャッシュは最適化にすぎないため、Redis障害時もミス扱いで続行する（登録/補完を失敗させない）。
 export const readMeaningCache = async (
 	redis: MeaningCacheClient,
 	word: string,
 	lang: string,
 ): Promise<GeneratedMeaning[] | null> => {
-	const raw = await redis.get(meaningCacheKey(word, lang));
-	if (raw == null) return null;
-	const parsed = CachedMeaningsSchema.safeParse(raw);
-	return parsed.success && parsed.data.length > 0 ? parsed.data : null;
+	try {
+		const raw = await redis.get(meaningCacheKey(word, lang));
+		if (raw == null) return null;
+		const parsed = CachedMeaningsSchema.safeParse(raw);
+		return parsed.success && parsed.data.length > 0 ? parsed.data : null;
+	} catch (error) {
+		console.error("failed to read meaning cache", word, error);
+		return null;
+	}
 };
 
 // 生成結果を共有キャッシュに書く（TTL付き）。空配列は書かない。
+// 書き込み失敗も補完全体は失敗させない（best-effort）。
 export const writeMeaningCache = async (
 	redis: MeaningCacheClient,
 	word: string,
@@ -43,7 +50,11 @@ export const writeMeaningCache = async (
 	meanings: GeneratedMeaning[],
 ): Promise<void> => {
 	if (meanings.length === 0) return;
-	await redis.set(meaningCacheKey(word, lang), meanings, {
-		ex: MEANING_CACHE_TTL_SECONDS,
-	});
+	try {
+		await redis.set(meaningCacheKey(word, lang), meanings, {
+			ex: MEANING_CACHE_TTL_SECONDS,
+		});
+	} catch (error) {
+		console.error("failed to write meaning cache", word, error);
+	}
 };

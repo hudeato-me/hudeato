@@ -70,3 +70,27 @@ describe("writeMeaningCache", () => {
 		expect(set).not.toHaveBeenCalled();
 	});
 });
+
+describe("Redis障害時の耐性（キャッシュはbest-effort）", () => {
+	it("読み込み失敗はミス扱いで null を返す", async () => {
+		const redis = {
+			get: vi.fn(async () => {
+				throw new Error("redis down");
+			}),
+			set: vi.fn(),
+		};
+		await expect(readMeaningCache(redis, "x", "ja")).resolves.toBeNull();
+	});
+
+	it("書き込み失敗は例外を伝播させない", async () => {
+		const redis = {
+			get: vi.fn(),
+			set: vi.fn(async () => {
+				throw new Error("redis down");
+			}),
+		};
+		await expect(
+			writeMeaningCache(redis, "x", "ja", [{ meaning: "m" }]),
+		).resolves.toBeUndefined();
+	});
+});

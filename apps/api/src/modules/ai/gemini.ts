@@ -1,6 +1,7 @@
 import {
 	GoogleGenerativeAI,
 	SchemaType,
+	type EmbedContentRequest,
 	type Schema,
 } from "@google/generative-ai";
 import {
@@ -16,10 +17,10 @@ import { EMBEDDING_DIM } from "../../db/word-schema";
 // テストでは "@google/generative-ai" をモックする。
 // ===========================================================================
 
-// 意味生成のモデル。埋め込みは 768 次元ネイティブの text-embedding-004 を使い
-// word_schema の EMBEDDING_DIM(768) と揃える。
+// 意味生成のモデル。埋め込みは gemini-embedding-001 を outputDimensionality で
+// word_schema の EMBEDDING_DIM(768) に合わせる（text-embedding-004 はAPIから廃止済み）。
 export const GEMINI_GENERATION_MODEL = "gemini-2.5-flash";
-export const GEMINI_EMBEDDING_MODEL = "text-embedding-004";
+export const GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
 
 // リトライ設定。一時的な失敗(5xx/レート制限)や不正な構造化出力に対し指数バックオフする。
 export interface RetryOptions {
@@ -149,8 +150,16 @@ export async function generateEmbedding(
 	const genAI = new GoogleGenerativeAI(apiKey);
 	const model = genAI.getGenerativeModel({ model: GEMINI_EMBEDDING_MODEL });
 
+	// SDK(0.24)の型定義に outputDimensionality が無いが、リクエストはそのまま
+	// 送信されるため型を拡張して渡す（REST API 側は対応済みのフィールド）。
+	const request: EmbedContentRequest & { outputDimensionality: number } = {
+		content: { role: "user", parts: [{ text }] },
+		// EMBEDDING_DIM(768) に次元を落とす。この場合正規化されないため下で自前で行う
+		outputDimensionality: EMBEDDING_DIM,
+	};
+
 	return withRetry(async () => {
-		const result = await model.embedContent(text);
+		const result = await model.embedContent(request);
 		const values = result.embedding?.values;
 		if (!values || values.length === 0) {
 			throw new Error("embedding response contained no values");

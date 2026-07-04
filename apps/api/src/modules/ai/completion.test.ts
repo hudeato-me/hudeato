@@ -9,7 +9,7 @@ const { generateWordCompletion, generateEmbedding } = vi.hoisted(() => ({
 vi.mock("./gemini", () => ({
 	generateWordCompletion,
 	generateEmbedding,
-	GEMINI_EMBEDDING_MODEL: "text-embedding-004",
+	GEMINI_EMBEDDING_MODEL: "gemini-embedding-001",
 }));
 
 import { user, word, wordEmbedding, wordMeaning, wordSet } from "../../db";
@@ -539,7 +539,7 @@ describe("completeWord", () => {
 			where: eq(wordEmbedding.wordId, "we1"),
 			columns: { wordId: true, model: true },
 		});
-		expect(emb?.model).toBe("text-embedding-004");
+		expect(emb?.model).toBe("gemini-embedding-001");
 	});
 
 	it("埋め込み生成が失敗しても例外を投げない（best-effort）", async () => {

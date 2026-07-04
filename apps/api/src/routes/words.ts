@@ -4,7 +4,9 @@ import { z } from "zod";
 import { Bindings, WordsRouteVariables } from "../types";
 import { getWordById, getWords, searchWordList, createWord, updateWord, removeWord } from "../modules/word/service";
 import { deleteImage } from "../modules/upload/service";
-import { failWordCompletion, hasEmptyCompletionFields } from "../modules/ai/completion";
+import { completeWord, failWordCompletion, hasEmptyCompletionFields } from "../modules/ai/completion";
+import { readMeaningCache } from "../modules/ai/cache";
+import { getRedis } from "../lib/redis/redis";
 import { handleZodError } from "../utils/error-validator";
 
 // 単語の意味 (WordMeaning) スキーマ
@@ -124,19 +126,45 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 			);
 
 			if (shouldComplete) {
-				try {
-					await c.env.WORD_COMPLETION_QUEUE.send({
-						wordId: result.id,
-						userId,
-						wordSetId: setId,
-						lang: "ja",
-						prompt: completionPrompt ?? null,
-					});
-				} catch (err) {
-					// enqueue 失敗時は pending のまま残さず failed にする（再補完で回収可能）。
-					console.error("failed to enqueue word completion", result.id, err);
-					await failWordCompletion(c.get("db"), result.id);
-					completionStatus = "failed";
+				const redis = getRedis(c.get("redisParams"));
+				const cached = await readMeaningCache(redis, text, "ja");
+
+				if (cached) {
+					// 既知語（キャッシュヒット）: AIを呼ばず同期で補完して即done。
+					// 「補完中」を挟まず一覧に完成状態で戻せる。
+					try {
+						await completeWord(
+							{ db: c.get("db"), apiKey: c.env.GEMINI_API_KEY, redis },
+							{
+								wordId: result.id,
+								userId,
+								wordSetId: setId,
+								lang: "ja",
+								prompt: completionPrompt ?? null,
+							},
+						);
+						completionStatus = "done";
+					} catch (err) {
+						console.error("sync completion failed", result.id, err);
+						await failWordCompletion(c.get("db"), result.id);
+						completionStatus = "failed";
+					}
+				} else {
+					// 未知語: キューに載せて裏で補完する。
+					try {
+						await c.env.WORD_COMPLETION_QUEUE.send({
+							wordId: result.id,
+							userId,
+							wordSetId: setId,
+							lang: "ja",
+							prompt: completionPrompt ?? null,
+						});
+					} catch (err) {
+						// enqueue 失敗時は pending のまま残さず failed にする（再補完で回収可能）。
+						console.error("failed to enqueue word completion", result.id, err);
+						await failWordCompletion(c.get("db"), result.id);
+						completionStatus = "failed";
+					}
 				}
 			}
 

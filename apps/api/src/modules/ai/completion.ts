@@ -1,8 +1,14 @@
 import type { MessageBatch } from "@cloudflare/workers-types";
 import type { GeneratedMeaning } from "@hudeato/schema";
 import { createDb } from "../../db";
+import { getRedis } from "../../lib/redis/redis";
 import type { Bindings } from "../../types";
 import type { Db } from "../../types/words-route-type";
+import {
+	readMeaningCache,
+	writeMeaningCache,
+	type MeaningCacheClient,
+} from "./cache";
 import { generateWordCompletion } from "./gemini";
 import {
 	applyWordCompletion,
@@ -125,16 +131,17 @@ export const mergeEmptyFields = (
 export interface CompleteWordDeps {
 	db: Db;
 	apiKey: string;
+	redis: MeaningCacheClient;
 }
 
 // 1件分の補完を実行する（基盤非依存のコア）。
-// 対象取得 → Gemini生成 → 空欄のみマージ → 反映(status=done)。
+// 対象取得 → 共有キャッシュ確認(ヒットならAIスキップ) → Gemini生成 → 空欄のみマージ → 反映(status=done)。
 // 例外は呼び出し側(consumer)でリトライ/failed判定する。
 export const completeWord = async (
 	deps: CompleteWordDeps,
 	msg: WordCompletionMessage,
 ): Promise<void> => {
-	const { db, apiKey } = deps;
+	const { db, apiKey, redis } = deps;
 	const target = await findWordForCompletion(
 		db,
 		msg.userId,
@@ -144,16 +151,25 @@ export const completeWord = async (
 	// 単語が削除済みなどで見つからなければ何もしない。
 	if (!target) return;
 
-	const result = await generateWordCompletion({
-		apiKey,
-		word: target.text,
-		lang: msg.lang,
-		prompt: msg.prompt,
-	});
+	// 共有キャッシュにヒットすれば Gemini を呼ばずに完了させる。
+	const cached = await readMeaningCache(redis, target.text, msg.lang);
+	let generated: GeneratedMeaning[];
+	if (cached) {
+		generated = cached;
+	} else {
+		const result = await generateWordCompletion({
+			apiKey,
+			word: target.text,
+			lang: msg.lang,
+			prompt: msg.prompt,
+		});
+		generated = result.meanings;
+		// 次のユーザーのために共有キャッシュへ保存する。
+		await writeMeaningCache(redis, target.text, msg.lang, generated);
+	}
 
-	const merged = mergeEmptyFields(target.meanings, result.meanings);
+	const merged = mergeEmptyFields(target.meanings, generated);
 	await applyWordCompletion(db, msg.wordId, merged);
-	// TODO(P1-4): 共有キャッシュ global:meaning:* への書き込み
 	// TODO(P1-5): word_embedding の生成
 };
 
@@ -176,9 +192,16 @@ export const handleWordCompletionQueue = async (
 	env: Bindings,
 ): Promise<void> => {
 	const db = createDb(env.TURSO_DATABASE_URL, env.TURSO_AUTH_TOKEN);
+	const redis = getRedis({
+		upstashRedisRestUrl: env.UPSTASH_REDIS_REST_URL,
+		upstashRedisRestToken: env.UPSTASH_REDIS_REST_TOKEN,
+	});
 	for (const message of batch.messages) {
 		try {
-			await completeWord({ db, apiKey: env.GEMINI_API_KEY }, message.body);
+			await completeWord(
+				{ db, apiKey: env.GEMINI_API_KEY, redis },
+				message.body,
+			);
 			message.ack();
 		} catch (error) {
 			console.error("word completion failed", message.body.wordId, error);

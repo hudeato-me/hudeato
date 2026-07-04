@@ -10,12 +10,26 @@ vi.mock("./gemini", () => ({ generateWordCompletion }));
 import { user, word, wordMeaning, wordSet } from "../../db";
 import { createTestDb } from "../../test/helpers";
 import { createTestContext, type TestContext } from "../../test/setup";
+import { meaningCacheKey } from "./cache";
 import {
 	completeWord,
 	hasEmptyCompletionFields,
 	mergeEmptyFields,
 } from "./completion";
 import type { CompletionMeaningRow } from "./repository";
+
+// 補完テスト用のインメモリ共有キャッシュ。
+const makeFakeRedis = () => {
+	const store = new Map<string, unknown>();
+	return {
+		store,
+		get: vi.fn(async (key: string) => (store.has(key) ? store.get(key) : null)),
+		set: vi.fn(async (key: string, value: unknown) => {
+			store.set(key, value);
+			return "OK";
+		}),
+	};
+};
 
 // ---------------------------------------------------------------------------
 // 純粋関数（DB不要）
@@ -121,6 +135,7 @@ describe("mergeEmptyFields", () => {
 describe("completeWord", () => {
 	let ctx: TestContext & { _applyMigrations: () => Promise<void> };
 	let db: ReturnType<typeof createTestDb>;
+	let redis: ReturnType<typeof makeFakeRedis>;
 
 	beforeAll(async () => {
 		ctx = createTestContext() as TestContext & {
@@ -133,7 +148,10 @@ describe("completeWord", () => {
 	});
 
 	afterAll(() => ctx.cleanup());
-	beforeEach(() => vi.clearAllMocks());
+	beforeEach(() => {
+		vi.clearAllMocks();
+		redis = makeFakeRedis();
+	});
 
 	it("空欄のみ補完し、入力済みは保持して status を done にする", async () => {
 		await db.insert(word).values({
@@ -165,7 +183,7 @@ describe("completeWord", () => {
 		});
 
 		await completeWord(
-			{ db, apiKey: "k" },
+			{ db, apiKey: "k", redis },
 			{ wordId: "w1", userId: "u1", wordSetId: "s1", lang: "ja", prompt: null },
 		);
 
@@ -193,7 +211,7 @@ describe("completeWord", () => {
 		});
 
 		await completeWord(
-			{ db, apiKey: "k" },
+			{ db, apiKey: "k", redis },
 			{ wordId: "w2", userId: "u1", wordSetId: "s1", lang: "ja", prompt: null },
 		);
 
@@ -219,7 +237,7 @@ describe("completeWord", () => {
 		});
 
 		await completeWord(
-			{ db, apiKey: "k" },
+			{ db, apiKey: "k", redis },
 			{
 				wordId: "w3",
 				userId: "u1",
@@ -238,7 +256,7 @@ describe("completeWord", () => {
 		generateWordCompletion.mockResolvedValue({ meanings: [{ meaning: "x" }] });
 		await expect(
 			completeWord(
-				{ db, apiKey: "k" },
+				{ db, apiKey: "k", redis },
 				{
 					wordId: "ghost",
 					userId: "u1",
@@ -264,7 +282,7 @@ describe("completeWord", () => {
 
 		// u1 として w-other を補完しようとしても対象が見つからない
 		await completeWord(
-			{ db, apiKey: "k" },
+			{ db, apiKey: "k", redis },
 			{
 				wordId: "w-other",
 				userId: "u1",
@@ -274,5 +292,67 @@ describe("completeWord", () => {
 			},
 		);
 		expect(generateWordCompletion).not.toHaveBeenCalled();
+	});
+
+	it("キャッシュヒット時は Gemini を呼ばずキャッシュの意味で補完する", async () => {
+		await db.insert(word).values({
+			id: "w-cache",
+			userId: "u1",
+			wordSetId: "s1",
+			text: "cached-word",
+			completionStatus: "pending",
+		});
+		// 共有キャッシュに事前投入
+		redis.store.set(meaningCacheKey("cached-word", "ja"), [
+			{ meaning: "キャッシュ意味", partOfSpeech: "名詞" },
+		]);
+
+		await completeWord(
+			{ db, apiKey: "k", redis },
+			{
+				wordId: "w-cache",
+				userId: "u1",
+				wordSetId: "s1",
+				lang: "ja",
+				prompt: null,
+			},
+		);
+
+		expect(generateWordCompletion).not.toHaveBeenCalled();
+		const ms = await db.query.wordMeaning.findMany({
+			where: eq(wordMeaning.wordId, "w-cache"),
+		});
+		expect(ms.map((m) => m.meaning)).toEqual(["キャッシュ意味"]);
+		const w = await db.query.word.findFirst({ where: eq(word.id, "w-cache") });
+		expect(w?.completionStatus).toBe("done");
+	});
+
+	it("キャッシュミス時は生成し、結果を共有キャッシュに書く", async () => {
+		await db.insert(word).values({
+			id: "w-miss",
+			userId: "u1",
+			wordSetId: "s1",
+			text: "novel-word",
+			completionStatus: "pending",
+		});
+		generateWordCompletion.mockResolvedValue({
+			meanings: [{ meaning: "新出の意味" }],
+		});
+
+		await completeWord(
+			{ db, apiKey: "k", redis },
+			{
+				wordId: "w-miss",
+				userId: "u1",
+				wordSetId: "s1",
+				lang: "ja",
+				prompt: null,
+			},
+		);
+
+		expect(generateWordCompletion).toHaveBeenCalledTimes(1);
+		expect(redis.store.get(meaningCacheKey("novel-word", "ja"))).toEqual([
+			{ meaning: "新出の意味" },
+		]);
 	});
 });

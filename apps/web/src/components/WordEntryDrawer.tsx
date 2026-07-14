@@ -229,6 +229,10 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         haptic('success');
         setIsRequestingAi(true);
         setAiError(false);
+        // キック時点のステータスを記録。サーバ側の変化（pending等）を観測するまで
+        // isRequestingAiを下ろさない（先に下ろすと、pending初観測までの隙間に
+        // 閉じ保存が「意味なし」で走り、AI補完の結果を上書き破壊するため）
+        statusAtKickRef.current = serverCompletionStatus;
         // 進行中のデバウンス保存をキャンセル（キック側の保存と二重にならないように）
         cancelPendingSave();
 
@@ -265,13 +269,21 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
                 }
             }
         };
-        kick()
-            .catch((err) => {
-                console.error('AI completion request failed:', err);
-                setAiError(true);
-            })
-            .finally(() => setIsRequestingAi(false));
+        kick().catch((err) => {
+            console.error('AI completion request failed:', err);
+            setAiError(true);
+            setIsRequestingAi(false);
+        });
     };
+
+    // サーバ側ステータスの変化（キック→pending/done/failed）を観測したら
+    // リクエスト中フラグを下ろす。以降は serverCompletionStatus が「補完中」を担う。
+    const statusAtKickRef = useRef<string | undefined>(undefined);
+    useEffect(() => {
+        if (isRequestingAi && serverCompletionStatus !== statusAtKickRef.current) {
+            setIsRequestingAi(false);
+        }
+    }, [isRequestingAi, serverCompletionStatus]);
 
     // ==== AI補完の完了をその場に反映（P1-8） ====
     // pending→done を検知したら、フォームの空欄にだけAI結果を流し込む（入力済みはユーザー優先）。
@@ -440,6 +452,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
             // AI補完まわりの状態をリセット
             setCompletionPrompt('');
             setAiError(false);
+            setIsRequestingAi(false);
             hasInitializedRef.current = false;
             prevCompletionStatusRef.current = undefined;
         }

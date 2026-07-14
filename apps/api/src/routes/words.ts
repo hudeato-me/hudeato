@@ -223,7 +223,15 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 			}
 
 			// 補完中表示に切り替えてからキューに載せる。
-			await markWordCompletionPending(db, userId, setId, wordId);
+			// すでに pending（補完ジョブが進行中）なら再エンキューせず 202 を返す
+			// （連打・並行リクエストによる多重 Gemini 実行の防止）。
+			const transitioned = await markWordCompletionPending(db, userId, setId, wordId);
+			if (!transitioned) {
+				return c.json(
+					{ error: null, data: { id: wordId, completionStatus: "pending" as const } },
+					202,
+				);
+			}
 			let completionStatus: "pending" | "failed" = "pending";
 			try {
 				await c.env.WORD_COMPLETION_QUEUE.send({

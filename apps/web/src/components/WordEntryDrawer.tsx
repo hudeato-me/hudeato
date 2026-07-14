@@ -140,6 +140,9 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
     const [aiError, setAiError] = useState(false);
     // オートセーブに渡すペイロード生成を切り替えるためのRef（フック順序の都合でRef経由）
     const isAiActiveRef = useRef(false);
+    // ドロワーの開閉セッション。閉じるたびに進め、閉じる前に発行した
+    // 非同期リクエストの結果でstateを更新しないようにするためのRef
+    const openSessionRef = useRef(0);
 
     // AI補完が進行中の間は、空欄を「意味なし」で潰さず保存する
     // （潰すとサーバの「空欄のみ補完」が対象を見失うため）
@@ -160,6 +163,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         lastSavedData,
         handleClose,
         cancelPendingSave,
+        waitForInFlightSave,
         deleteWord
     } = useWordAutoSave({
         wordSetId,
@@ -251,15 +255,25 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
 
         // 閉じない: ユーザーはこのまま結果を見てもいいし、いつ閉じてもいい。
         // 閉じた場合は一覧の「AI補完中」バッジ＋ポーリングが引き継ぐ。
+        // ドロワーが閉じられたら以降の状態更新は捨てる（closeでリセット済みの
+        // createdWordId 等を、遅れて解決したリクエストが復活させないため）。
+        const session = openSessionRef.current;
+        const isSessionAlive = () => openSessionRef.current === session;
         const kick = async () => {
-            if (effectiveWordId) {
-                // オートセーブで作成済み → 現在の内容を空欄のまま保存して再補完をキック
-                await updateWordForAi({ wordId: effectiveWordId, data: aiPayload });
-                const res = await requestCompletion({ wordId: effectiveWordId, data: { prompt } });
+            // タイマー発火済みの自動保存が走っていれば完了を待つ
+            // （古い保存がキック側のPUTより後着して空欄を「意味なし」で潰すのを防ぐ）。
+            const inFlightWordId = await waitForInFlightSave();
+            const targetWordId = effectiveWordId ?? inFlightWordId;
+            if (targetWordId) {
+                // 作成済み → 現在の内容を空欄のまま保存して再補完をキック
+                await updateWordForAi({ wordId: targetWordId, data: aiPayload });
+                const res = await requestCompletion({ wordId: targetWordId, data: { prompt } });
+                if (!isSessionAlive()) return;
                 if (res.data?.completionStatus === 'failed') setAiError(true);
             } else {
                 // 未作成 → 補完ONで新規作成（サーバ側でpending→キュー投入）
                 const res = await createWordWithAi(aiPayload);
+                if (!isSessionAlive()) return;
                 if (res.data?.id) setCreatedWordId(res.data.id);
                 if (res.data?.completionStatus === 'failed') setAiError(true);
                 // 共有キャッシュヒットで即doneの場合、pending遷移が観測されないため
@@ -271,6 +285,7 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
         };
         kick().catch((err) => {
             console.error('AI completion request failed:', err);
+            if (!isSessionAlive()) return;
             setAiError(true);
             setIsRequestingAi(false);
         });
@@ -455,6 +470,8 @@ export function WordEntryDrawer({ isOpen, onClose, wordSetId, existingWordId }: 
             setIsRequestingAi(false);
             hasInitializedRef.current = false;
             prevCompletionStatusRef.current = undefined;
+            // 閉じる前に発行した非同期リクエストの結果を無効化する
+            openSessionRef.current += 1;
         }
     }, [isOpen]);
 

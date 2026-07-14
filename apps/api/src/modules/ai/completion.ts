@@ -191,6 +191,27 @@ export const completeWord = async (
 		(msg.prompt != null && msg.prompt.trim() !== "") ||
 		(msg.targets != null && msg.targets.length > 0);
 
+	// 上書き指定つき再生成では、対象スロットの既存の語義をプロンプトに渡し、
+	// 生成される語義の並びが対象とずれる（別の語義で上書きする）のを防ぐ。
+	let effectivePrompt = msg.prompt;
+	if (msg.targets && msg.targets.length > 0) {
+		const targetContext = msg.targets
+			.map((t) => {
+				const m = target.meanings.find((x) => x.slot === t.slot);
+				return m && !isEmpty(m.meaning) ? `語義${t.slot}: ${m.meaning}` : null;
+			})
+			.filter((s): s is string => s != null)
+			.join("\n");
+		if (targetContext) {
+			effectivePrompt = [
+				msg.prompt?.trim() || null,
+				`再生成の対象は次の語義です。この語義に対応する内容を同じ順序で生成してください:\n${targetContext}`,
+			]
+				.filter(Boolean)
+				.join("\n");
+		}
+	}
+
 	// 共有キャッシュにヒットすれば Gemini を呼ばずに完了させる。
 	const cached = isContextual
 		? null
@@ -203,7 +224,7 @@ export const completeWord = async (
 			apiKey,
 			word: target.text,
 			lang: msg.lang,
-			prompt: msg.prompt,
+			prompt: effectivePrompt,
 		});
 		generated = result.meanings;
 		if (!isContextual) {
@@ -213,11 +234,15 @@ export const completeWord = async (
 	}
 
 	// 明示指定があればその欄だけ上書き、なければ空欄のみ補完する。
-	const merged =
-		msg.targets && msg.targets.length > 0
-			? mergeTargetedFields(target.meanings, generated, msg.targets)
-			: mergeEmptyFields(target.meanings, generated);
-	await applyWordCompletion(db, msg.wordId, merged);
+	// 空欄のみ補完は反映トランザクション内で空欄を再チェックし、
+	// 生成中に入ったユーザー編集を上書きしない。
+	const isTargeted = msg.targets != null && msg.targets.length > 0;
+	const merged = isTargeted
+		? mergeTargetedFields(target.meanings, generated, msg.targets!)
+		: mergeEmptyFields(target.meanings, generated);
+	await applyWordCompletion(db, msg.wordId, merged, {
+		fillBlanksOnly: !isTargeted,
+	});
 };
 
 // 埋め込みの入力テキストを組み立てる（単語 + 意味）。P2の近傍検索の質を左右する。
@@ -271,11 +296,12 @@ export const failWordCompletion = async (
 	await markWordCompletionFailed(db, wordId);
 };
 
-// リトライ上限（wrangler.toml の max_retries と揃える）。
-const MAX_COMPLETION_ATTEMPTS = 3;
+// 最大配信回数 = 初回 + wrangler.toml の max_retries(3)。
+// attempts は初回配信で 1 から始まるため、最終配信は attempts === 4。
+const MAX_COMPLETION_DELIVERIES = 4;
 
 // Queues consumer 本体。バッチ内の各メッセージを補完し、
-// 失敗は上限までリトライ、上限超過で failed 確定する。
+// 失敗は上限までリトライ、最終配信での失敗で failed 確定する。
 export const handleWordCompletionQueue = async (
 	batch: MessageBatch<WordCompletionMessage>,
 	env: Bindings,
@@ -299,9 +325,20 @@ export const handleWordCompletionQueue = async (
 			message.ack();
 		} catch (error) {
 			console.error("word completion failed", message.body.wordId, error);
-			if (message.attempts >= MAX_COMPLETION_ATTEMPTS) {
-				await markWordCompletionFailed(db, message.body.wordId).catch(() => {});
-				message.ack();
+			if (message.attempts >= MAX_COMPLETION_DELIVERIES) {
+				// failed の記録に失敗した場合は ack せず再配信に賭ける
+				// （記録できないまま ack すると単語が pending のまま取り残されるため）。
+				try {
+					await markWordCompletionFailed(db, message.body.wordId);
+					message.ack();
+				} catch (markError) {
+					console.error(
+						"failed to mark word completion as failed",
+						message.body.wordId,
+						markError,
+					);
+					message.retry();
+				}
 			} else {
 				message.retry();
 			}

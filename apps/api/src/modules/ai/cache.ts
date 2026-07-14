@@ -19,9 +19,11 @@ export const MEANING_CACHE_TTL_SECONDS = 60 * 60 * 24 * 30;
 // キャッシュに保存する形（AI生成の意味配列）。
 const CachedMeaningsSchema = z.array(GeneratedMeaningSchema);
 
-// 単語を正規化してキャッシュキーを作る（前後空白除去 + 小文字化）。
+// 単語を正規化してキャッシュキーを作る（前後空白除去 + Unicode NFC正規化）。
+// 大文字小文字は保持する（US/us・Polish/polish など大小で意味が変わる語を
+// 同一視すると、誤った意味がキャッシュヒットしてそのまま保存されるため）。
 export const meaningCacheKey = (word: string, lang: string): string =>
-	`global:meaning:${word.trim().toLowerCase()}:${lang}`;
+	`global:meaning:${word.trim().normalize("NFC")}:${lang}`;
 
 // 共有キャッシュを読む。ヒットして形が正しければ意味配列、そうでなければ null。
 // キャッシュは最適化にすぎないため、Redis障害時もミス扱いで続行する（登録/補完を失敗させない）。

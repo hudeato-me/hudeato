@@ -7,10 +7,19 @@ import {
 } from "./cache";
 
 describe("meaningCacheKey", () => {
-	it("前後空白を除去し小文字化してキーを作る", () => {
-		expect(meaningCacheKey("  Ephemeral ", "ja")).toBe(
+	it("前後空白を除去しNFC正規化してキーを作る", () => {
+		expect(meaningCacheKey("  ephemeral ", "ja")).toBe(
 			"global:meaning:ephemeral:ja",
 		);
+		// 結合文字（e + ́）は合成形（é）に正規化される
+		expect(meaningCacheKey("café", "ja")).toBe(
+			"global:meaning:café:ja",
+		);
+	});
+
+	it("大文字小文字は保持する（US/usなど大小で意味が変わる語を同一視しない）", () => {
+		expect(meaningCacheKey("US", "ja")).toBe("global:meaning:US:ja");
+		expect(meaningCacheKey("us", "ja")).toBe("global:meaning:us:ja");
 	});
 });
 

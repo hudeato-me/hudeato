@@ -22,7 +22,6 @@
 		"test:watch": "vitest"
 	},
 	"dependencies": {
-		"@google/generative-ai": "^0.24.1",
 		"@hono/zod-validator": "^0.7.6",
 		"@hudeato/schema": "workspace:*",
 		"@hudeato/shared": "workspace:*",

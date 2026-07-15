@@ -45,6 +45,15 @@ export function useWordAutoSave({
     // ユーザーの入力から0.8秒待ってから保存するためのタイマー
     const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+    // 実行中の保存リクエスト（作成された単語IDに解決）。
+    // タイマー発火後は clearTimeout では止められないため、AI補完のキックは
+    // これを待ってから自身の保存を送り、古い保存が後勝ちする競合を防ぐ。
+    const inFlightSaveRef = useRef<Promise<string | null> | null>(null);
+
+    // ドロワーが閉じた後に完了した保存が createdWordId を復活させないためのRef
+    const isOpenRef = useRef(isOpen);
+    isOpenRef.current = isOpen;
+
     // 変更監視＆オートセーブ
     useEffect(() => {
         // ドロワー未開閉、単語セット未選択、または単語未入力の場合はスキップ
@@ -64,38 +73,52 @@ export function useWordAutoSave({
         setIsSaving(true);
 
         // 0.8秒待ってから保存する
-        debounceTimerRef.current = setTimeout(async () => {
-            console.log('[DEBUG] Executing debounced save for effectiveWordId:', effectiveWordId);
-            const payload = buildPayload();
+        debounceTimerRef.current = setTimeout(() => {
+            const run = (async (): Promise<string | null> => {
+                console.log('[DEBUG] Executing debounced save for effectiveWordId:', effectiveWordId);
+                const payload = buildPayload();
+                let savedWordId: string | null = effectiveWordId ?? null;
 
-            try {
-                // 既存の単語の更新である場合
-                if (effectiveWordId) {
-                    // Update
-                    console.log('[DEBUG] Calling updateWord API now');
-                    // updateWordAsyncを呼び出して保存
-                    await updateWordAsync({ wordId: effectiveWordId, data: payload });
-                    console.log('[DEBUG] Auto-save (updateWord) SUCCESS');
-                } else {
-                    // Create
-                    console.log('[DEBUG] Calling createWord API now for auto-save');
-                    // createWordAsyncを呼び出して保存
-                    const response = await createWordAsync(payload);
-                    console.log('[DEBUG] Auto-save (createWord) SUCCESS. New ID:', response.data?.id);
-                    // 新規作成された単語のIDを保持
-                    if (response.data && response.data.id) {
-                        // createdWordIdに保存
-                        setCreatedWordId(response.data.id);
+                try {
+                    // 既存の単語の更新である場合
+                    if (effectiveWordId) {
+                        // Update
+                        console.log('[DEBUG] Calling updateWord API now');
+                        // updateWordAsyncを呼び出して保存
+                        await updateWordAsync({ wordId: effectiveWordId, data: payload });
+                        console.log('[DEBUG] Auto-save (updateWord) SUCCESS');
+                    } else {
+                        // Create
+                        console.log('[DEBUG] Calling createWord API now for auto-save');
+                        // createWordAsyncを呼び出して保存
+                        const response = await createWordAsync(payload);
+                        console.log('[DEBUG] Auto-save (createWord) SUCCESS. New ID:', response.data?.id);
+                        // 新規作成された単語のIDを保持
+                        // （閉じた後に解決した場合はセットしない。リセット済みの
+                        //  createdWordId を復活させ、次回の新規作成が前の単語を
+                        //  編集してしまうため）
+                        if (response.data && response.data.id) {
+                            savedWordId = response.data.id;
+                            if (isOpenRef.current) {
+                                // createdWordIdに保存
+                                setCreatedWordId(response.data.id);
+                            }
+                        }
                     }
+                } catch (error) {
+                    console.error('[DEBUG] Auto-save ERROR:', error);
+                } finally {
+                    // 保存が完了したことを示す
+                    setIsSaving(false);
                 }
-            } catch (error) {
-                console.error('[DEBUG] Auto-save ERROR:', error);
-            } finally {
-                // 保存が完了したことを示す
-                setIsSaving(false);
-            }
-            // 保存が完了したら、lastSavedDataを更新
-            lastSavedData.current = currentData;
+                // 保存が完了したら、lastSavedDataを更新
+                lastSavedData.current = currentData;
+                return savedWordId;
+            })();
+            inFlightSaveRef.current = run;
+            run.finally(() => {
+                if (inFlightSaveRef.current === run) inFlightSaveRef.current = null;
+            });
         }, 800);
 
         return () => {
@@ -143,6 +166,23 @@ export function useWordAutoSave({
         }
     }, [onClose, wordSetId, word, buildPayload, effectiveWordId, updateWordAsync, createWordAsync]);
 
+    // 進行中のデバウンス保存をキャンセルする
+    // （AI補完のキック直前に呼び、キック側の保存とタイマー保存の二重実行を防ぐ）
+    const cancelPendingSave = useCallback(() => {
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+            debounceTimerRef.current = null;
+        }
+        setIsSaving(false);
+    }, []);
+
+    // タイマー発火済みで実行中の保存の完了を待つ（作成された単語IDに解決）。
+    // AI補完のキックはこれを待ってから自身の保存を送ることで、
+    // 古い保存（「意味なし」埋めのペイロード）が後着して空欄を潰すのを防ぐ。
+    const waitForInFlightSave = useCallback((): Promise<string | null> => {
+        return inFlightSaveRef.current ?? Promise.resolve(null);
+    }, []);
+
     // 削除のAPI呼び出し部分のみを担当（アニメーション制御は呼び出し元で行う）
     const deleteWord = useCallback(async () => {
         // 単語か単語セットのIDが無い場合はスキップ
@@ -170,6 +210,8 @@ export function useWordAutoSave({
         setCreatedWordId,
         lastSavedData,
         handleClose,
+        cancelPendingSave,
+        waitForInFlightSave,
         deleteWord
     };
 }

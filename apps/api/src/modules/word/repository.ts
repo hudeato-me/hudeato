@@ -22,6 +22,7 @@ export const findWordsBySet = async (
 			id: true,
 			text: true,
 			isMastered: true,
+			completionStatus: true,
 			createdAt: true,
 			updatedAt: true,
 		},
@@ -64,6 +65,7 @@ export const findWordById = async (db: Db, userId: string, wordSetId: string, wo
 			locationLabel: true,
 			imageKey: true,
 			isMastered: true,
+			completionStatus: true,
 			lastReviewedAt: true,
 			createdAt: true,
 			updatedAt: true,
@@ -220,7 +222,9 @@ export const insertWord = async (
 		etymology?: string | null;
 		source?: string | null;
 		slot: number;
-	}>
+	}>,
+	// AI補完を予約する場合は 'pending' を渡す。未指定はDB既定の 'done'。
+	completionStatus?: "pending" | "done" | "failed",
 ) => {
 	await db.transaction(async (tx) => {
 		await tx.insert(word).values({
@@ -230,6 +234,7 @@ export const insertWord = async (
 			text: data.text,
 			locationLabel: data.locationLabel,
 			imageKey: data.imageKey,
+			...(completionStatus ? { completionStatus } : {}),
 		});
 
 		if (meanings.length > 0) {

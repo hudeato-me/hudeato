@@ -60,6 +60,13 @@ export const word = sqliteTable(
     text: text("text").notNull(),
     locationLabel: text("location_label"),
     imageKey: text("image_key"),
+    // AI補完の進行状況。'pending'=補完中 / 'done'=完了 / 'failed'=失敗。
+    // 空欄なしで登録された場合は補完不要のため 'done' を既定とする。
+    completionStatus: text("completion_status", {
+      enum: ["pending", "done", "failed"],
+    })
+      .default("done")
+      .notNull(),
     isMastered: integer("is_mastered", { mode: "boolean" })
       .default(false)
       .notNull(),

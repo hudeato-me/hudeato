@@ -86,3 +86,61 @@ export const StudyReviewResponseSchema = z.object({
 	reviewState: ReviewStateSchema,
 });
 export type StudyReviewResponse = z.infer<typeof StudyReviewResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// AI補完（P1）の共有スキーマ
+// Gemini の構造化出力(JSON)を受ける契約。api / web はこのZodを単一の正とする。
+// ---------------------------------------------------------------------------
+
+// 単語の補完ステータス。'pending'=補完中 / 'done'=完了 / 'failed'=失敗。
+export const CompletionStatusSchema = z.enum(["pending", "done", "failed"]);
+export type CompletionStatus = z.infer<typeof CompletionStatusSchema>;
+
+// AIが生成する1つの意味。word_meaning の各slotに対応する。
+// meaning のみ必須。他は不明なら null（Gemini responseSchema でも nullable）。
+// source(出典) はユーザー由来のため AI 生成対象に含めない。
+export const GeneratedMeaningSchema = z.object({
+	meaning: z.string().min(1),
+	partOfSpeech: z.string().nullish(),
+	phonetic: z.string().nullish(),
+	example: z.string().nullish(),
+	collocation: z.string().nullish(),
+	synonym: z.string().nullish(),
+	etymology: z.string().nullish(),
+});
+export type GeneratedMeaning = z.infer<typeof GeneratedMeaningSchema>;
+
+// AI補完1回分の結果（単語の複数語義）。
+export const WordCompletionResultSchema = z.object({
+	meanings: z.array(GeneratedMeaningSchema).min(1),
+});
+export type WordCompletionResult = z.infer<typeof WordCompletionResultSchema>;
+
+// AI補完で埋めうるフィールド（source=出典 はユーザー由来のため対象外）。
+export const CompletableFieldSchema = z.enum([
+	"meaning",
+	"partOfSpeech",
+	"phonetic",
+	"example",
+	"collocation",
+	"synonym",
+	"etymology",
+]);
+export type CompletableField = z.infer<typeof CompletableFieldSchema>;
+export const COMPLETABLE_FIELDS = CompletableFieldSchema.options;
+
+// POST /words/:setId/:wordId/complete のリクエスト（チャット文脈つき再補完）。
+// targets を明示指定した欄だけ上書き再生成する。省略時は空欄のみ補完。
+export const WordRecompleteRequestSchema = z.object({
+	prompt: z.string().nullish(),
+	targets: z
+		.array(
+			z.object({
+				slot: z.number().int().min(1).max(5),
+				fields: z.array(CompletableFieldSchema).min(1),
+			}),
+		)
+		.min(1)
+		.optional(),
+});
+export type WordRecompleteRequest = z.infer<typeof WordRecompleteRequestSchema>;

@@ -10,3 +10,24 @@ ENVIRONMENT = "development"
 [[r2_buckets]]
 binding = "IMAGES_BUCKET"
 bucket_name = "hudeato-dev-images"
+
+# Workers AI（意味生成 gpt-oss-120b + 埋め込み embeddinggemma-300m）。
+# ローカル開発でも実際のWorkers AIにプロキシされる（利用分は課金対象）。
+[ai]
+binding = "AI"
+
+# AI生成の意味の共有キャッシュ（global:meaning:{word}:{lang}）。
+[[kv_namespaces]]
+binding = "MEANING_CACHE"
+id = "00303457d1914600940492abf7158e50"
+
+# AI補完ジョブのキュー。producer は API、consumer は同一Workerの queue ハンドラ。
+[[queues.producers]]
+binding = "WORD_COMPLETION_QUEUE"
+queue = "word-completion"
+
+[[queues.consumers]]
+queue = "word-completion"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 3

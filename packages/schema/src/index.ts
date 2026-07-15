@@ -144,3 +144,43 @@ export const WordRecompleteRequestSchema = z.object({
 		.optional(),
 });
 export type WordRecompleteRequest = z.infer<typeof WordRecompleteRequestSchema>;
+
+// ---------------------------------------------------------------------------
+// クイズ(P2)の共有スキーマ
+// クイズは meaning 単位で出題する（review が meaning 単位のため）。
+// 正誤判定はクライアント側で行うため、レスポンスに correctIndex を含める。
+// ---------------------------------------------------------------------------
+
+// 出題方向。wordToMeaning=問題文が単語・選択肢が意味 / meaningToWord=問題文が意味・選択肢が単語
+export const QuizDirectionSchema = z.enum(["wordToMeaning", "meaningToWord"]);
+export type QuizDirection = z.infer<typeof QuizDirectionSchema>;
+
+// 出題範囲。all=セット内全ての意味 / unanswered=未正解(word_meaning.isRemembered=false)の意味のみ
+export const QuizScopeSchema = z.enum(["all", "unanswered"]);
+export type QuizScope = z.infer<typeof QuizScopeSchema>;
+
+// GET /quiz/:setId のクエリ（エンドポイント自体は P2-3）
+export const QuizQuerySchema = z.object({
+	scope: QuizScopeSchema.default("all"),
+	direction: QuizDirectionSchema.default("wordToMeaning"),
+	count: z.coerce.number().int().min(1).max(20).default(10),
+});
+export type QuizQuery = z.infer<typeof QuizQuerySchema>;
+
+// クイズの1問。正誤判定はクライアント側で行うため correctIndex を送出する。
+export const QuizQuestionSchema = z.object({
+	wordId: z.string(),
+	meaningId: z.string(),
+	prompt: z.string().min(1),
+	choices: z.array(z.string()).length(4),
+	correctIndex: z.number().int().min(0).max(3),
+});
+export type QuizQuestion = z.infer<typeof QuizQuestionSchema>;
+
+// GET /quiz/:setId のレスポンス
+export const QuizResponseSchema = z.object({
+	scope: QuizScopeSchema,
+	direction: QuizDirectionSchema,
+	questions: z.array(QuizQuestionSchema),
+});
+export type QuizResponse = z.infer<typeof QuizResponseSchema>;

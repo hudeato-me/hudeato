@@ -5,20 +5,20 @@ import {
 	type GeneratedMeaning,
 } from "@hudeato/schema";
 import { createDb } from "../../db";
-import { getRedis } from "../../lib/redis/redis";
 import type { Bindings } from "../../types";
 import type { Db } from "../../types/words-route-type";
 import { upsertWordEmbedding } from "../study/repository";
 import {
 	readMeaningCache,
 	writeMeaningCache,
-	type MeaningCacheClient,
+	type MeaningCacheStore,
 } from "./cache";
 import {
-	GEMINI_EMBEDDING_MODEL,
+	WORKERS_AI_EMBEDDING_MODEL,
 	generateEmbedding,
 	generateWordCompletion,
-} from "./gemini";
+	type AiClient,
+} from "./workers-ai";
 import {
 	applyWordCompletion,
 	findWordForCompletion,
@@ -164,18 +164,18 @@ export const mergeTargetedFields = (
 
 export interface CompleteWordDeps {
 	db: Db;
-	apiKey: string;
-	redis: MeaningCacheClient;
+	ai: AiClient;
+	cache: MeaningCacheStore;
 }
 
 // 1件分の補完を実行する（基盤非依存のコア）。
-// 対象取得 → 共有キャッシュ確認(ヒットならAIスキップ) → Gemini生成 → 空欄のみマージ → 反映(status=done)。
+// 対象取得 → 共有キャッシュ確認(ヒットならAIスキップ) → Workers AI生成 → 空欄のみマージ → 反映(status=done)。
 // 例外は呼び出し側(consumer)でリトライ/failed判定する。
 export const completeWord = async (
 	deps: CompleteWordDeps,
 	msg: WordCompletionMessage,
 ): Promise<void> => {
-	const { db, apiKey, redis } = deps;
+	const { db, ai, cache } = deps;
 	const target = await findWordForCompletion(
 		db,
 		msg.userId,
@@ -212,16 +212,16 @@ export const completeWord = async (
 		}
 	}
 
-	// 共有キャッシュにヒットすれば Gemini を呼ばずに完了させる。
+	// 共有キャッシュにヒットすれば Workers AI を呼ばずに完了させる。
 	const cached = isContextual
 		? null
-		: await readMeaningCache(redis, target.text, msg.lang);
+		: await readMeaningCache(cache, target.text, msg.lang);
 	let generated: GeneratedMeaning[];
 	if (cached) {
 		generated = cached;
 	} else {
 		const result = await generateWordCompletion({
-			apiKey,
+			ai,
 			word: target.text,
 			lang: msg.lang,
 			prompt: effectivePrompt,
@@ -229,7 +229,7 @@ export const completeWord = async (
 		generated = result.meanings;
 		if (!isContextual) {
 			// 次のユーザーのために共有キャッシュへ保存する。
-			await writeMeaningCache(redis, target.text, msg.lang, generated);
+			await writeMeaningCache(cache, target.text, msg.lang, generated);
 		}
 	}
 
@@ -267,10 +267,10 @@ export interface EmbeddingTarget {
 // 補完済みの単語+意味から埋め込みを生成し upsert する。
 // 失敗しても意味は保存済みのため補完全体は失敗させず、ログのみ残す。
 export const generateWordEmbedding = async (
-	deps: { db: Db; apiKey: string },
+	deps: { db: Db; ai: AiClient },
 	target: EmbeddingTarget,
 ): Promise<void> => {
-	const { db, apiKey } = deps;
+	const { db, ai } = deps;
 	try {
 		const word = await findWordForCompletion(
 			db,
@@ -280,8 +280,8 @@ export const generateWordEmbedding = async (
 		);
 		if (!word) return;
 		const input = buildEmbeddingInput(word.text, word.meanings);
-		const vector = await generateEmbedding({ apiKey, text: input });
-		await upsertWordEmbedding(db, target.wordId, vector, GEMINI_EMBEDDING_MODEL);
+		const vector = await generateEmbedding({ ai, text: input });
+		await upsertWordEmbedding(db, target.wordId, vector, WORKERS_AI_EMBEDDING_MODEL);
 	} catch (error) {
 		console.error("failed to generate word embedding", target.wordId, error);
 	}
@@ -307,21 +307,14 @@ export const handleWordCompletionQueue = async (
 	env: Bindings,
 ): Promise<void> => {
 	const db = createDb(env.TURSO_DATABASE_URL, env.TURSO_AUTH_TOKEN);
-	const redis = getRedis({
-		upstashRedisRestUrl: env.UPSTASH_REDIS_REST_URL,
-		upstashRedisRestToken: env.UPSTASH_REDIS_REST_TOKEN,
-	});
 	for (const message of batch.messages) {
 		try {
 			await completeWord(
-				{ db, apiKey: env.GEMINI_API_KEY, redis },
+				{ db, ai: env.AI, cache: env.MEANING_CACHE },
 				message.body,
 			);
 			// 補完成功後に埋め込みを生成（best-effort、失敗してもackする）。
-			await generateWordEmbedding(
-				{ db, apiKey: env.GEMINI_API_KEY },
-				message.body,
-			);
+			await generateWordEmbedding({ db, ai: env.AI }, message.body);
 			message.ack();
 		} catch (error) {
 			console.error("word completion failed", message.body.wordId, error);

@@ -12,7 +12,7 @@ describe("meaningCacheKey", () => {
 			"global:meaning:ephemeral:ja",
 		);
 		// 結合文字（e + ́）は合成形（é）に正規化される
-		expect(meaningCacheKey("café", "ja")).toBe(
+		expect(meaningCacheKey("café", "ja")).toBe(
 			"global:meaning:café:ja",
 		);
 	});
@@ -25,26 +25,26 @@ describe("meaningCacheKey", () => {
 
 describe("readMeaningCache", () => {
 	it("ヒット時は意味配列を返す", async () => {
-		const redis = {
+		const kv = {
 			get: vi.fn(async () => [{ meaning: "はかない" }]),
-			set: vi.fn(),
+			put: vi.fn(),
 		};
-		const result = await readMeaningCache(redis, "ephemeral", "ja");
+		const result = await readMeaningCache(kv, "ephemeral", "ja");
 		expect(result).toEqual([{ meaning: "はかない" }]);
-		expect(redis.get).toHaveBeenCalledWith("global:meaning:ephemeral:ja");
+		expect(kv.get).toHaveBeenCalledWith("global:meaning:ephemeral:ja", "json");
 	});
 
 	it("null や形が不正なら null を返す", async () => {
 		expect(
 			await readMeaningCache(
-				{ get: vi.fn(async () => null), set: vi.fn() },
+				{ get: vi.fn(async () => null), put: vi.fn() },
 				"x",
 				"ja",
 			),
 		).toBeNull();
 		expect(
 			await readMeaningCache(
-				{ get: vi.fn(async () => ({ notArray: true })), set: vi.fn() },
+				{ get: vi.fn(async () => ({ notArray: true })), put: vi.fn() },
 				"x",
 				"ja",
 			),
@@ -52,7 +52,7 @@ describe("readMeaningCache", () => {
 		// meaning が空文字（スキーマ違反）なら null
 		expect(
 			await readMeaningCache(
-				{ get: vi.fn(async () => [{ meaning: "" }]), set: vi.fn() },
+				{ get: vi.fn(async () => [{ meaning: "" }]), put: vi.fn() },
 				"x",
 				"ja",
 			),
@@ -61,45 +61,45 @@ describe("readMeaningCache", () => {
 });
 
 describe("writeMeaningCache", () => {
-	it("TTL付きで書き込む", async () => {
-		const set = vi.fn(async () => "OK");
-		await writeMeaningCache({ get: vi.fn(), set }, "ephemeral", "ja", [
+	it("TTL付きでJSON文字列を書き込む", async () => {
+		const put = vi.fn(async () => undefined);
+		await writeMeaningCache({ get: vi.fn(), put }, "ephemeral", "ja", [
 			{ meaning: "はかない" },
 		]);
-		expect(set).toHaveBeenCalledWith(
+		expect(put).toHaveBeenCalledWith(
 			"global:meaning:ephemeral:ja",
-			[{ meaning: "はかない" }],
-			{ ex: MEANING_CACHE_TTL_SECONDS },
+			JSON.stringify([{ meaning: "はかない" }]),
+			{ expirationTtl: MEANING_CACHE_TTL_SECONDS },
 		);
 	});
 
 	it("空配列は書き込まない", async () => {
-		const set = vi.fn();
-		await writeMeaningCache({ get: vi.fn(), set }, "x", "ja", []);
-		expect(set).not.toHaveBeenCalled();
+		const put = vi.fn();
+		await writeMeaningCache({ get: vi.fn(), put }, "x", "ja", []);
+		expect(put).not.toHaveBeenCalled();
 	});
 });
 
-describe("Redis障害時の耐性（キャッシュはbest-effort）", () => {
+describe("KV障害時の耐性（キャッシュはbest-effort）", () => {
 	it("読み込み失敗はミス扱いで null を返す", async () => {
-		const redis = {
+		const kv = {
 			get: vi.fn(async () => {
-				throw new Error("redis down");
+				throw new Error("kv down");
 			}),
-			set: vi.fn(),
+			put: vi.fn(),
 		};
-		await expect(readMeaningCache(redis, "x", "ja")).resolves.toBeNull();
+		await expect(readMeaningCache(kv, "x", "ja")).resolves.toBeNull();
 	});
 
 	it("書き込み失敗は例外を伝播させない", async () => {
-		const redis = {
+		const kv = {
 			get: vi.fn(),
-			set: vi.fn(async () => {
-				throw new Error("redis down");
+			put: vi.fn(async () => {
+				throw new Error("kv down");
 			}),
 		};
 		await expect(
-			writeMeaningCache(redis, "x", "ja", [{ meaning: "m" }]),
+			writeMeaningCache(kv, "x", "ja", [{ meaning: "m" }]),
 		).resolves.toBeUndefined();
 	});
 });

@@ -4,13 +4,18 @@ import { z } from "zod";
 // ===========================================================================
 // 共有キャッシュ（P1-4）
 // global:meaning:{word}:{lang} に AI 生成の意味を保存し、よく登録される語で
-// Gemini 呼び出しを削減する。全ユーザー横断の共通キャッシュ。
+// Workers AI 呼び出しを削減する。全ユーザー横断の共通キャッシュ（Workers KV）。
 // ===========================================================================
 
-// キャッシュに必要な最小インターフェース（Upstash Redis が満たす）。テストでは差し替える。
-export interface MeaningCacheClient {
-	get(key: string): Promise<unknown>;
-	set(key: string, value: unknown, opts?: { ex?: number }): Promise<unknown>;
+// キャッシュに必要な最小インターフェース（Workers KV の KVNamespace が満たす）。
+// テストでは差し替える。
+export interface MeaningCacheStore {
+	get(key: string, type: "json"): Promise<unknown>;
+	put(
+		key: string,
+		value: string,
+		options?: { expirationTtl?: number },
+	): Promise<unknown>;
 }
 
 // 共有キャッシュのTTL（30日）。
@@ -26,14 +31,14 @@ export const meaningCacheKey = (word: string, lang: string): string =>
 	`global:meaning:${word.trim().normalize("NFC")}:${lang}`;
 
 // 共有キャッシュを読む。ヒットして形が正しければ意味配列、そうでなければ null。
-// キャッシュは最適化にすぎないため、Redis障害時もミス扱いで続行する（登録/補完を失敗させない）。
+// キャッシュは最適化にすぎないため、KV障害時もミス扱いで続行する（登録/補完を失敗させない）。
 export const readMeaningCache = async (
-	redis: MeaningCacheClient,
+	cache: MeaningCacheStore,
 	word: string,
 	lang: string,
 ): Promise<GeneratedMeaning[] | null> => {
 	try {
-		const raw = await redis.get(meaningCacheKey(word, lang));
+		const raw = await cache.get(meaningCacheKey(word, lang), "json");
 		if (raw == null) return null;
 		const parsed = CachedMeaningsSchema.safeParse(raw);
 		return parsed.success && parsed.data.length > 0 ? parsed.data : null;
@@ -46,15 +51,15 @@ export const readMeaningCache = async (
 // 生成結果を共有キャッシュに書く（TTL付き）。空配列は書かない。
 // 書き込み失敗も補完全体は失敗させない（best-effort）。
 export const writeMeaningCache = async (
-	redis: MeaningCacheClient,
+	cache: MeaningCacheStore,
 	word: string,
 	lang: string,
 	meanings: GeneratedMeaning[],
 ): Promise<void> => {
 	if (meanings.length === 0) return;
 	try {
-		await redis.set(meaningCacheKey(word, lang), meanings, {
-			ex: MEANING_CACHE_TTL_SECONDS,
+		await cache.put(meaningCacheKey(word, lang), JSON.stringify(meanings), {
+			expirationTtl: MEANING_CACHE_TTL_SECONDS,
 		});
 	} catch (error) {
 		console.error("failed to write meaning cache", word, error);

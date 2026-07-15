@@ -8,7 +8,6 @@ import { WordRecompleteRequestSchema } from "@hudeato/schema";
 import { completeWord, failWordCompletion, generateWordEmbedding, hasEmptyCompletionFields } from "../modules/ai/completion";
 import { markWordCompletionPending } from "../modules/ai/repository";
 import { readMeaningCache } from "../modules/ai/cache";
-import { getRedis } from "../lib/redis/redis";
 import { handleZodError } from "../utils/error-validator";
 
 // 単語の意味 (WordMeaning) スキーマ
@@ -128,19 +127,18 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 			);
 
 			if (shouldComplete) {
-				const redis = getRedis(c.get("redisParams"));
 				// カスタムprompt付きは文脈依存の生成になるため共有キャッシュを使わず必ずキューに載せる。
 				const hasPrompt = !!completionPrompt?.trim();
 				const cached = hasPrompt
 					? null
-					: await readMeaningCache(redis, text, "ja");
+					: await readMeaningCache(c.env.MEANING_CACHE, text, "ja");
 
 				if (cached) {
 					// 既知語（キャッシュヒット）: AIを呼ばず同期で補完して即done。
 					// 「補完中」を挟まず一覧に完成状態で戻せる。
 					try {
 						await completeWord(
-							{ db: c.get("db"), apiKey: c.env.GEMINI_API_KEY, redis },
+							{ db: c.get("db"), ai: c.env.AI, cache: c.env.MEANING_CACHE },
 							{
 								wordId: result.id,
 								userId,
@@ -153,7 +151,7 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 
 						// 埋め込みは応答をブロックしないよう背後で生成（best-effort）。
 						const embeddingJob = generateWordEmbedding(
-							{ db: c.get("db"), apiKey: c.env.GEMINI_API_KEY },
+							{ db: c.get("db"), ai: c.env.AI },
 							{ wordId: result.id, userId, wordSetId: setId },
 						);
 						try {
@@ -224,7 +222,7 @@ const words = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 
 			// 補完中表示に切り替えてからキューに載せる。
 			// すでに pending（補完ジョブが進行中）なら再エンキューせず 202 を返す
-			// （連打・並行リクエストによる多重 Gemini 実行の防止）。
+			// （連打・並行リクエストによる多重 AI 実行の防止）。
 			const transitioned = await markWordCompletionPending(db, userId, setId, wordId);
 			if (!transitioned) {
 				return c.json(

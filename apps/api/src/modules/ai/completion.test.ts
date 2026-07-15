@@ -1,15 +1,15 @@
 import { asc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-// gemini モジュールをモックして、生成結果を差し替えられるようにする。
+// workers-ai モジュールをモックして、生成結果を差し替えられるようにする。
 const { generateWordCompletion, generateEmbedding } = vi.hoisted(() => ({
 	generateWordCompletion: vi.fn(),
 	generateEmbedding: vi.fn(),
 }));
-vi.mock("./gemini", () => ({
+vi.mock("./workers-ai", () => ({
 	generateWordCompletion,
 	generateEmbedding,
-	GEMINI_EMBEDDING_MODEL: "gemini-embedding-001",
+	WORKERS_AI_EMBEDDING_MODEL: "@cf/google/embeddinggemma-300m",
 }));
 
 import { user, word, wordEmbedding, wordMeaning, wordSet } from "../../db";
@@ -27,18 +27,23 @@ import {
 } from "./completion";
 import type { CompletionMeaningRow } from "./repository";
 
-// 補完テスト用のインメモリ共有キャッシュ。
-const makeFakeRedis = () => {
-	const store = new Map<string, unknown>();
+// 補完テスト用のインメモリ共有キャッシュ（Workers KV 相当）。
+const makeFakeKv = () => {
+	const store = new Map<string, string>();
 	return {
 		store,
-		get: vi.fn(async (key: string) => (store.has(key) ? store.get(key) : null)),
-		set: vi.fn(async (key: string, value: unknown) => {
+		get: vi.fn(async (key: string) => {
+			const raw = store.get(key);
+			return raw == null ? null : JSON.parse(raw);
+		}),
+		put: vi.fn(async (key: string, value: string) => {
 			store.set(key, value);
-			return "OK";
 		}),
 	};
 };
+
+// 生成関数はモジュールごとモックするため、AIバインディングはダミーでよい。
+const fakeAi = { run: vi.fn() };
 
 // ---------------------------------------------------------------------------
 // 純粋関数（DB不要）
@@ -203,13 +208,13 @@ describe("buildEmbeddingInput", () => {
 });
 
 // ---------------------------------------------------------------------------
-// completeWord / generateWordEmbedding（DB結合・Geminiモック）
+// completeWord / generateWordEmbedding（DB結合・workers-aiモック）
 // ---------------------------------------------------------------------------
 
 describe("completeWord", () => {
 	let ctx: TestContext & { _applyMigrations: () => Promise<void> };
 	let db: ReturnType<typeof createTestDb>;
-	let redis: ReturnType<typeof makeFakeRedis>;
+	let cache: ReturnType<typeof makeFakeKv>;
 
 	beforeAll(async () => {
 		ctx = createTestContext() as TestContext & {
@@ -224,7 +229,7 @@ describe("completeWord", () => {
 	afterAll(() => ctx.cleanup());
 	beforeEach(() => {
 		vi.clearAllMocks();
-		redis = makeFakeRedis();
+		cache = makeFakeKv();
 	});
 
 	it("空欄のみ補完し、入力済みは保持して status を done にする", async () => {
@@ -257,7 +262,7 @@ describe("completeWord", () => {
 		});
 
 		await completeWord(
-			{ db, apiKey: "k", redis },
+			{ db, ai: fakeAi, cache },
 			{ wordId: "w1", userId: "u1", wordSetId: "s1", lang: "ja", prompt: null },
 		);
 
@@ -285,7 +290,7 @@ describe("completeWord", () => {
 		});
 
 		await completeWord(
-			{ db, apiKey: "k", redis },
+			{ db, ai: fakeAi, cache },
 			{ wordId: "w2", userId: "u1", wordSetId: "s1", lang: "ja", prompt: null },
 		);
 
@@ -311,7 +316,7 @@ describe("completeWord", () => {
 		});
 
 		await completeWord(
-			{ db, apiKey: "k", redis },
+			{ db, ai: fakeAi, cache },
 			{
 				wordId: "w3",
 				userId: "u1",
@@ -330,7 +335,7 @@ describe("completeWord", () => {
 		generateWordCompletion.mockResolvedValue({ meanings: [{ meaning: "x" }] });
 		await expect(
 			completeWord(
-				{ db, apiKey: "k", redis },
+				{ db, ai: fakeAi, cache },
 				{
 					wordId: "ghost",
 					userId: "u1",
@@ -356,7 +361,7 @@ describe("completeWord", () => {
 
 		// u1 として w-other を補完しようとしても対象が見つからない
 		await completeWord(
-			{ db, apiKey: "k", redis },
+			{ db, ai: fakeAi, cache },
 			{
 				wordId: "w-other",
 				userId: "u1",
@@ -368,7 +373,7 @@ describe("completeWord", () => {
 		expect(generateWordCompletion).not.toHaveBeenCalled();
 	});
 
-	it("キャッシュヒット時は Gemini を呼ばずキャッシュの意味で補完する", async () => {
+	it("キャッシュヒット時は AI を呼ばずキャッシュの意味で補完する", async () => {
 		await db.insert(word).values({
 			id: "w-cache",
 			userId: "u1",
@@ -377,12 +382,13 @@ describe("completeWord", () => {
 			completionStatus: "pending",
 		});
 		// 共有キャッシュに事前投入
-		redis.store.set(meaningCacheKey("cached-word", "ja"), [
-			{ meaning: "キャッシュ意味", partOfSpeech: "名詞" },
-		]);
+		cache.store.set(
+			meaningCacheKey("cached-word", "ja"),
+			JSON.stringify([{ meaning: "キャッシュ意味", partOfSpeech: "名詞" }]),
+		);
 
 		await completeWord(
-			{ db, apiKey: "k", redis },
+			{ db, ai: fakeAi, cache },
 			{
 				wordId: "w-cache",
 				userId: "u1",
@@ -414,7 +420,7 @@ describe("completeWord", () => {
 		});
 
 		await completeWord(
-			{ db, apiKey: "k", redis },
+			{ db, ai: fakeAi, cache },
 			{
 				wordId: "w-miss",
 				userId: "u1",
@@ -425,9 +431,9 @@ describe("completeWord", () => {
 		);
 
 		expect(generateWordCompletion).toHaveBeenCalledTimes(1);
-		expect(redis.store.get(meaningCacheKey("novel-word", "ja"))).toEqual([
-			{ meaning: "新出の意味" },
-		]);
+		expect(
+			JSON.parse(cache.store.get(meaningCacheKey("novel-word", "ja"))!),
+		).toEqual([{ meaning: "新出の意味" }]);
 	});
 
 	it("カスタムprompt付きは共有キャッシュを読まず・書かず生成する", async () => {
@@ -439,15 +445,16 @@ describe("completeWord", () => {
 			completionStatus: "pending",
 		});
 		// キャッシュにヒットする状態でも prompt があれば無視する
-		redis.store.set(meaningCacheKey("context-word", "ja"), [
-			{ meaning: "キャッシュ意味" },
-		]);
+		cache.store.set(
+			meaningCacheKey("context-word", "ja"),
+			JSON.stringify([{ meaning: "キャッシュ意味" }]),
+		);
 		generateWordCompletion.mockResolvedValue({
 			meanings: [{ meaning: "文脈付きの意味" }],
 		});
 
 		await completeWord(
-			{ db, apiKey: "k", redis },
+			{ db, ai: fakeAi, cache },
 			{
 				wordId: "w-ctx",
 				userId: "u1",
@@ -459,9 +466,9 @@ describe("completeWord", () => {
 
 		expect(generateWordCompletion).toHaveBeenCalledTimes(1);
 		// キャッシュは上書きされていない（文脈依存の出力で汚染しない）
-		expect(redis.store.get(meaningCacheKey("context-word", "ja"))).toEqual([
-			{ meaning: "キャッシュ意味" },
-		]);
+		expect(
+			JSON.parse(cache.store.get(meaningCacheKey("context-word", "ja"))!),
+		).toEqual([{ meaning: "キャッシュ意味" }]);
 		const ms = await db.query.wordMeaning.findMany({
 			where: eq(wordMeaning.wordId, "w-ctx"),
 		});
@@ -488,7 +495,7 @@ describe("completeWord", () => {
 		});
 
 		await completeWord(
-			{ db, apiKey: "k", redis },
+			{ db, ai: fakeAi, cache },
 			{
 				wordId: "w-target",
 				userId: "u1",
@@ -528,7 +535,7 @@ describe("completeWord", () => {
 		generateEmbedding.mockResolvedValue(vec);
 
 		await generateWordEmbedding(
-			{ db, apiKey: "k" },
+			{ db, ai: fakeAi },
 			{ wordId: "we1", userId: "u1", wordSetId: "s1" },
 		);
 
@@ -539,7 +546,7 @@ describe("completeWord", () => {
 			where: eq(wordEmbedding.wordId, "we1"),
 			columns: { wordId: true, model: true },
 		});
-		expect(emb?.model).toBe("gemini-embedding-001");
+		expect(emb?.model).toBe("@cf/google/embeddinggemma-300m");
 	});
 
 	it("埋め込み生成が失敗しても例外を投げない（best-effort）", async () => {
@@ -550,11 +557,11 @@ describe("completeWord", () => {
 			text: "x",
 			completionStatus: "done",
 		});
-		generateEmbedding.mockRejectedValue(new Error("gemini down"));
+		generateEmbedding.mockRejectedValue(new Error("ai down"));
 
 		await expect(
 			generateWordEmbedding(
-				{ db, apiKey: "k" },
+				{ db, ai: fakeAi },
 				{ wordId: "we2", userId: "u1", wordSetId: "s1" },
 			),
 		).resolves.toBeUndefined();

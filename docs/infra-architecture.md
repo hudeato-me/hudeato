@@ -23,14 +23,15 @@ graph TB
 
         Queue[Cloudflare Queues]:::cf
         R2[Cloudflare R2<br/>Object Storage]:::cf
+        KV[(Workers KV<br/>AI出力 共有キャッシュ)]:::cf
+        WorkersAI[Workers AI<br/>gpt-oss-120b /<br/>embeddinggemma-300m]:::ai
     end
 
     %% 外部サービス
     subgraph External [External Services]
         DB[(Turso libSQL<br/>Main DB)]:::ext
         Vector[(Turso Vector<br/>Embeddings)]:::ext
-        Redis[(Upstash Redis<br/>Cache / Rate Limit)]:::ext
-        Gemini[Google Gemini<br/>2.5 Flash Lite]:::ai
+        Redis[(Upstash Redis<br/>Rate Limit / Auth Session)]:::ext
     end
 
     %% 接続線
@@ -41,15 +42,16 @@ graph TB
     %% APIの責務
     API -->|Auth / CRUD| DB
     API -->|Vector Search| Vector
-    API -->|Cache / Limit| Redis
+    API -->|Limit / Session| Redis
+    API -->|Read Cache| KV
     API -->|Signed URL| R2
     API -->|Enqueue Job| Queue
 
     %% 非同期ワーカーの責務
     Queue --> |Job| Consumer
     Cron --> Consumer
-    Consumer -->|Gen Content| Gemini
+    Consumer -->|Gen Content / Embedding| WorkersAI
     Consumer -->|Upsert Data| DB
     Consumer -->|Upsert Vector| Vector
-    Consumer -->|Cache Result| Redis
+    Consumer -->|Cache Result| KV
 ```

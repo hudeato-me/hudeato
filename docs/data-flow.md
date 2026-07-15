@@ -36,29 +36,28 @@ sequenceDiagram
     autonumber
     participant App as Mobile App
     participant API as API (Hono)
-    participant Redis as Upstash Redis<br/>(Global Cache)
+    participant KV as Workers KV<br/>(Global Cache)
     participant DB as Turso (Main DB)
     participant Q as Queue
     participant W as Worker
-    participant AI as Gemini 2.5
+    participant AI as Workers AI<br/>(gpt-oss-120b)
 
     Note over App, AI: 2. 単語登録（共有キャッシュ活用）
 
     App->>API: POST /words (text="ephemeral", is_public=true)
 
     Note right of API: まず共有キャッシュを確認
-    API->>Redis: GET global:meaning:ephemeral:ja
+    API->>KV: GET global:meaning:ephemeral:ja
 
     alt キャッシュヒット (誰かが既に生成済み)
-        Redis-->>API: { meaning: "短命な...", example: "..." }
+        KV-->>API: { meaning: "短命な...", example: "..." }
         Note right of API: AIを呼ばずに完了とする
         API->>DB: INSERT (status="done", 意味データ含む)
         DB-->>API: New ID
-        API->>Redis: DEL user:{uid}:words:list (リストキャッシュ削除)
         API-->>App: 201 Created (完了状態)
 
     else キャッシュミス (未知の単語)
-        Redis-->>API: null
+        KV-->>API: null
         Note right of API: とりあえず枠だけ作る
         API->>DB: INSERT (status="pending")
         API->>Q: Enqueue (word="ephemeral", is_public=true)
@@ -71,15 +70,22 @@ sequenceDiagram
 
         par DB更新・ベクトル化・キャッシュ共有
             W->>DB: UPDATE (status="done", result)
+            W->>AI: 埋め込み生成 (embeddinggemma-300m)
             W->>DB: (Vector Upsert...)
 
-            alt ユーザーが公開を許可 (is_public)
-                W->>Redis: SET global:meaning:ephemeral:ja (result)
+            alt カスタムprompt無し（文脈非依存の生成）
+                W->>KV: PUT global:meaning:ephemeral:ja (result, TTL 30日)
                 Note right of W: 次のユーザーのために保存
             end
         end
     end
 ```
+
+補足:
+
+- AI（意味生成・埋め込み）は Workers AI バインディング経由（意味生成 `@cf/openai/gpt-oss-120b`、埋め込み `@cf/google/embeddinggemma-300m`・768次元）。外部APIキー不要。
+- AI出力の共有キャッシュは Workers KV（`global:meaning:{word}:{lang}`）。Upstash Redis はレート制限・認証セッション用に残る。
+- カスタムprompt付き・上書き指定（targets）付きの生成は文脈依存のため、共有キャッシュを読まない・書かない。
 
 ### 4択クイズ生成
 

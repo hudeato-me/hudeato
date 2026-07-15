@@ -1,6 +1,8 @@
 
 ### 単語の取得
 
+> **未実装（構想）**: 以下のユーザー別リストキャッシュ（`user:{uid}:words:list`）は現在実装されておらず、APIは毎回 Turso から取得している。導入時はこの図に沿う。
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -28,8 +30,6 @@ sequenceDiagram
 ```
 
 ### 単語の追加
-
-キャッシュをredis保存にしているがデータベースにした方がよい。
 
 ```mermaid
 sequenceDiagram

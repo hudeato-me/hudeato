@@ -15,7 +15,7 @@
 | Phase | テーマ | 主眼 | 依存 | ファイル |
 |---|---|---|---|---|
 | **P0** | 基盤整備 | 学習データモデル・共通API土台・テスト/CI | — | [P0-foundation.md](./P0-foundation.md) |
-| **P1** | AI補完 | 入力最小化（Gemini・非同期補完） | P0 | [P1-ai-completion.md](./P1-ai-completion.md) |
+| **P1** | AI補完 | 入力最小化（Workers AI・非同期補完） | P0 | [P1-ai-completion.md](./P1-ai-completion.md) |
 | **P2** | 4択クイズ | 想起（ベクトル検索ディストラクタ） | P0, P1 | [P2-quiz.md](./P2-quiz.md) |
 | **P3** | フラッシュカード | 想起（スワイプ学習） | P0 | [P3-flashcard.md](./P3-flashcard.md) |
 | **P4** | 間隔反復 | 定着（忘却曲線スケジューリング） | P2, P3 | [P4-spaced-repetition.md](./P4-spaced-repetition.md) |

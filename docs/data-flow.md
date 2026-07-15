@@ -50,7 +50,7 @@ sequenceDiagram
     API->>KV: GET global:meaning:ephemeral:ja
 
     alt キャッシュヒット (誰かが既に生成済み)
-        KV-->>API: { meaning: "短命な...", example: "..." }
+        KV-->>API: [{ meaning: "短命な...", example: "..." }]
         Note right of API: AIを呼ばずに完了とする
         API->>DB: INSERT (status="done", 意味データ含む)
         DB-->>API: New ID

@@ -5,11 +5,16 @@ import type {
 	QuizScope,
 } from "@hudeato/schema";
 import { Db } from "../../types/words-route-type";
-import { findQuizCandidates, type QuizCandidate } from "./repository";
+import {
+	findNearestWordIdsForWord,
+	findQuizCandidates,
+	type QuizCandidate,
+} from "./repository";
 
 // クイズ生成のビジネスロジック層。
-// 正解はセット内からランダム選定し、ダミー選択肢は同セット内の他の単語からランダムに選ぶ
-// (ベクトル近傍によるディストラクタ差し替えは P2-2)。
+// 正解はセット内からランダム選定し、ダミー選択肢は正解語のベクトル近傍(上位10件)からの
+// サンプリングを優先する。近傍が足りない・埋め込みが無い場合は残りの候補からランダムに
+// フォールバックして補う。
 
 export type QuizGenerationParams = {
 	userId: string;
@@ -63,24 +68,38 @@ const pickOneCandidatePerWord = (
 const distractorText = (candidate: QuizCandidate, direction: QuizDirection) =>
 	direction === "wordToMeaning" ? candidate.meaningText : candidate.wordText;
 
-// 正解語を除いた候補プールから、テキスト重複なしのディストラクタを最大3件ランダムに選ぶ。
-// P2-2でベクトル近傍実装に切り替える際、埋め込み欠損時のフォールバックとして
-// 再利用する想定のため独立関数にしている。
-export const pickRandomDistractors = (
+// 正解語を除いた候補プールから、テキスト重複なしのディストラクタを最大3件選ぶ。
+// preferredWordIds(正解語のベクトル近傍・近い順)があればそこからのサンプリングを優先し、
+// 足りない分は残りの候補(非近傍、または埋め込み欠損時は全候補)からランダムに埋める。
+export const pickDistractors = (
 	pool: QuizCandidate[],
 	correct: { wordId: string; text: string },
 	direction: QuizDirection,
 	rng: () => number = Math.random,
+	preferredWordIds: string[] = [],
 ): string[] => {
 	const correctText = correct.text.trim();
-	const otherWords = pickOneCandidatePerWord(
+	const otherCandidates = pickOneCandidatePerWord(
 		pool.filter((candidate) => candidate.wordId !== correct.wordId),
 		rng,
 	);
 
+	const preferredWordIdSet = new Set(preferredWordIds);
+	const preferredCandidates = otherCandidates.filter((candidate) =>
+		preferredWordIdSet.has(candidate.wordId),
+	);
+	const restCandidates = otherCandidates.filter(
+		(candidate) => !preferredWordIdSet.has(candidate.wordId),
+	);
+	// 近傍群→残り群の順で、それぞれをシャッフルして連結する(=近傍優先のサンプリング)。
+	const orderedCandidates = [
+		...shuffle(preferredCandidates, rng),
+		...shuffle(restCandidates, rng),
+	];
+
 	const seenTexts = new Set([correctText]);
 	const distractors: string[] = [];
-	for (const candidate of shuffle(otherWords, rng)) {
+	for (const candidate of orderedCandidates) {
 		const text = distractorText(candidate, direction).trim();
 		if (!text || seenTexts.has(text)) continue;
 		seenTexts.add(text);
@@ -91,11 +110,15 @@ export const pickRandomDistractors = (
 	return distractors;
 };
 
+// 正解語につきベクトル近傍検索で優先する候補数(上位k件からサンプリングする)。
+const NEIGHBOR_DISTRACTOR_LIMIT = 10;
+
 // 指定範囲(scope)から4択クイズを生成する。
 // 1. 出題候補を単語単位でグループ化し、シャッフルして先頭 count 語を採用する。
 // 2. 各語につき eligible な意味から1つを正解として選ぶ。
-// 3. 同セット内の他の単語からランダムにディストラクタを3件選ぶ
+// 3. 正解語のベクトル近傍(上位10件)を優先してディストラクタを3件選ぶ
 //    (scope=unanswered でもディストラクタは all プールから選ぶ)。
+//    近傍が足りない・埋め込みが無い場合は残りの候補からランダムに補う。
 // 4. ディストラクタが3件揃わない問題はドロップする。
 export const generateQuiz = async (
 	db: Db,
@@ -130,11 +153,19 @@ export const generateQuiz = async (
 		const correctText =
 			direction === "wordToMeaning" ? correct.meaningText : correct.wordText;
 
-		const distractors = pickRandomDistractors(
+		const neighborWordIds = await findNearestWordIdsForWord(
+			db,
+			userId,
+			wordSetId,
+			wordId,
+			NEIGHBOR_DISTRACTOR_LIMIT,
+		);
+		const distractors = pickDistractors(
 			distractorPool,
 			{ wordId, text: correctText },
 			direction,
 			rng,
+			neighborWordIds,
 		);
 		if (distractors.length < 3) continue;
 

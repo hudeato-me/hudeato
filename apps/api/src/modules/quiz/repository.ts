@@ -1,6 +1,7 @@
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import type { QuizScope } from "@hudeato/schema";
-import { word, wordMeaning } from "../../db";
+import { word, wordEmbedding, wordMeaning } from "../../db";
 import { Db } from "../../types/words-route-type";
 
 // クイズ生成が使う出題候補(単語×意味)のSQLクエリを定義する。
@@ -53,4 +54,45 @@ export const findQuizCandidates = async (
 			meaningText: row.meaningText.trim(),
 		}))
 		.filter((row) => row.wordText !== "" && row.meaningText !== "");
+};
+
+// ---------------------------------------------------------------------------
+// ベクトル近傍によるディストラクタ候補の抽出。
+// ---------------------------------------------------------------------------
+
+// 指定単語の埋め込みに近い同セット内の単語IDを近い順に返す（自己結合。
+// 対象単語に埋め込みが無ければ空配列）。
+// wordId は呼び出し元でユーザー/セットスコープ済みであることを前提とする
+// （target 側結合にはスコープを掛けていない）。
+export const findNearestWordIdsForWord = async (
+	db: Db,
+	userId: string,
+	wordSetId: string,
+	wordId: string,
+	k: number,
+): Promise<string[]> => {
+	if (!Number.isInteger(k) || k < 1) {
+		throw new Error("k must be a positive integer");
+	}
+
+	// 対象単語自身の埋め込みを自己結合で参照する側のエイリアス
+	const target = alias(wordEmbedding, "target_embedding");
+	const distance = sql<number>`vector_distance_cos(${wordEmbedding.embedding}, ${target.embedding})`;
+
+	const rows = await db
+		.select({ wordId: wordEmbedding.wordId, distance })
+		.from(wordEmbedding)
+		.innerJoin(word, eq(word.id, wordEmbedding.wordId))
+		.innerJoin(target, eq(target.wordId, wordId))
+		.where(
+			and(
+				eq(word.userId, userId),
+				eq(word.wordSetId, wordSetId),
+				ne(wordEmbedding.wordId, wordId),
+			),
+		)
+		.orderBy(asc(distance))
+		.limit(k);
+
+	return rows.map((row) => row.wordId);
 };

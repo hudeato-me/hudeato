@@ -1,8 +1,9 @@
-import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, count, eq, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { QuizScope } from "@hudeato/schema";
 import { word, wordEmbedding, wordMeaning } from "../../db";
 import { Db } from "../../types/words-route-type";
+import { saveReviewInTx } from "../study/repository";
 
 // クイズ生成が使う出題候補(単語×意味)のSQLクエリを定義する。
 
@@ -95,4 +96,97 @@ export const findNearestWordIdsForWord = async (
 		.limit(k);
 
 	return rows.map((row) => row.wordId);
+};
+
+// ---------------------------------------------------------------------------
+// クイズの回答記録・解説取得。
+// ---------------------------------------------------------------------------
+
+// 回答結果を1トランザクションで記録する。
+// (a) study.saveReviewInTx で review_log 追記 + review_state 更新
+// (b) 回答した meaning の isRemembered を正誤に応じて更新
+// (c) その単語の全 meaning の isRemembered を集計し、word.isMastered を再計算
+//     （全て true かつ meaning が1件以上 → true、それ以外 → false）
+// 呼び出し元で対象 word/meaning の所有・整合性確認を済ませている前提。
+export const saveQuizAnswer = async (
+	db: Db,
+	params: {
+		logId: string;
+		wordId: string;
+		meaningId: string;
+		correct: boolean;
+	},
+) => {
+	return db.transaction(async (tx) => {
+		const reviewState = await saveReviewInTx(tx, {
+			logId: params.logId,
+			wordId: params.wordId,
+			meaningId: params.meaningId,
+			mode: "quiz",
+			result: params.correct ? "correct" : "wrong",
+		});
+
+		await tx
+			.update(wordMeaning)
+			.set({ isRemembered: params.correct })
+			.where(eq(wordMeaning.id, params.meaningId));
+
+		// 全行取得ではなく件数集計で isMastered を再計算する
+		const [{ total, unrememberedCount }] = await tx
+			.select({
+				total: count(),
+				unrememberedCount: count(
+					sql`CASE WHEN ${wordMeaning.isRemembered} = false THEN 1 END`,
+				),
+			})
+			.from(wordMeaning)
+			.where(eq(wordMeaning.wordId, params.wordId));
+
+		const isMastered = total > 0 && unrememberedCount === 0;
+
+		await tx
+			.update(word)
+			.set({ isMastered })
+			.where(eq(word.id, params.wordId));
+
+		return { reviewState, isRemembered: params.correct, isMastered };
+	});
+};
+
+// 解説表示用に単語＋意味一覧（slot昇順）を取得する。
+// userId / wordSetId / wordId スコープで絞り、見つからなければ undefined。
+// word/repository.ts の findWordById は meaning.id を含まず不要な列も多いため、
+// 解説専用に必要な列だけを取得するクエリとしてここに新設する。
+export const findWordExplanation = async (
+	db: Db,
+	userId: string,
+	wordSetId: string,
+	wordId: string,
+) => {
+	return db.query.word.findFirst({
+		where: and(
+			eq(word.userId, userId),
+			eq(word.wordSetId, wordSetId),
+			eq(word.id, wordId),
+		),
+		columns: { id: true, text: true, locationLabel: true, imageKey: true },
+		with: {
+			meanings: {
+				orderBy: [asc(wordMeaning.slot)],
+				columns: {
+					id: true,
+					slot: true,
+					meaning: true,
+					partOfSpeech: true,
+					phonetic: true,
+					example: true,
+					collocation: true,
+					synonym: true,
+					etymology: true,
+					source: true,
+					isRemembered: true,
+				},
+			},
+		},
+	});
 };

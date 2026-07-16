@@ -2,6 +2,8 @@
 
 > セットの言葉で4択クイズ。ダミー選択肢は**ベクトル近傍**で意味的に紛らわしい語を選ぶ。終了後に正誤一覧と解説。
 
+> **注記（2026-07）**: `correctIndex` はクライアント側正誤判定の決定によりレスポンスに含める（本文表の「非送出」記載は計画当時のもの）。出題方向 `direction=wordToMeaning|meaningToWord` をユーザー指定で追加した。`scope=unanswered` は `word_meaning.isRemembered` ベースで、正解→`true` / 不正解→`false` に更新される。
+
 - **依存**: P0（出題対象・review API・ベクトル列）, P1（埋め込み生成）
 - **領域**: `server` / `webfront`
 - **完了でアンロックされるもの**: P4（正誤データを忘却曲線に流す）, P6

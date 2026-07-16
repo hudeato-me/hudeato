@@ -184,3 +184,45 @@ export const QuizResponseSchema = z.object({
 	questions: z.array(QuizQuestionSchema),
 });
 export type QuizResponse = z.infer<typeof QuizResponseSchema>;
+
+// POST /quiz/:setId/answer のリクエスト。正誤判定はクライアント側で行い、結果だけを記録する。
+export const QuizAnswerRequestSchema = z.object({
+	wordId: z.string().min(1),
+	meaningId: z.string().min(1),
+	correct: z.boolean(),
+});
+export type QuizAnswerRequest = z.infer<typeof QuizAnswerRequestSchema>;
+
+// レスポンス: review_state に加え、更新後の isRemembered / isMastered を返す（Web の表示更新用）。
+export const QuizAnswerResponseSchema = z.object({
+	success: z.boolean(),
+	reviewState: ReviewStateSchema,
+	isRemembered: z.boolean(),
+	isMastered: z.boolean(),
+});
+export type QuizAnswerResponse = z.infer<typeof QuizAnswerResponseSchema>;
+
+// GET /quiz/:setId/:wordId/explain のレスポンス（結果一覧からの解説表示用）。
+export const QuizExplainMeaningSchema = z.object({
+	id: z.string(),
+	slot: z.number().int(),
+	meaning: z.string(),
+	partOfSpeech: z.string().nullable(),
+	phonetic: z.string().nullable(),
+	example: z.string().nullable(),
+	collocation: z.string().nullable(),
+	synonym: z.string().nullable(),
+	etymology: z.string().nullable(),
+	source: z.string().nullable(),
+	isRemembered: z.boolean(),
+});
+export type QuizExplainMeaning = z.infer<typeof QuizExplainMeaningSchema>;
+
+export const QuizExplainResponseSchema = z.object({
+	wordId: z.string(),
+	text: z.string(),
+	locationLabel: z.string().nullable(),
+	imageKey: z.string().nullable(),
+	meanings: z.array(QuizExplainMeaningSchema),
+});
+export type QuizExplainResponse = z.infer<typeof QuizExplainResponseSchema>;

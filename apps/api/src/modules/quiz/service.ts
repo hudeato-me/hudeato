@@ -1,13 +1,18 @@
 import type {
+	QuizAnswerRequest,
 	QuizDirection,
+	QuizExplainResponse,
 	QuizQuestion,
 	QuizResponse,
 	QuizScope,
+	ReviewState,
 } from "@hudeato/schema";
 import { Db } from "../../types/words-route-type";
 import {
 	findNearestWordIdsForWord,
 	findQuizCandidates,
+	findWordExplanation,
+	saveQuizAnswer,
 	type QuizCandidate,
 } from "./repository";
 
@@ -184,4 +189,72 @@ export const generateQuiz = async (
 	}
 
 	return { scope, direction, questions };
+};
+
+// ---------------------------------------------------------------------------
+// 回答記録・解説取得。
+// ---------------------------------------------------------------------------
+
+// クイズの回答結果を記録し、更新後の review_state / isRemembered / isMastered を返す。
+// 呼び出し側で対象 word/meaning の所有・整合性確認を済ませている前提（study.recordReview と同様）。
+export const recordQuizAnswer = async (
+	db: Db,
+	params: QuizAnswerRequest,
+): Promise<{
+	reviewState: ReviewState;
+	isRemembered: boolean;
+	isMastered: boolean;
+}> => {
+	const { reviewState, isRemembered, isMastered } = await saveQuizAnswer(db, {
+		logId: crypto.randomUUID(),
+		wordId: params.wordId,
+		meaningId: params.meaningId,
+		correct: params.correct,
+	});
+
+	return {
+		reviewState: {
+			meaningId: reviewState.meaningId,
+			reps: reviewState.reps,
+			lapses: reviewState.lapses,
+			intervalDays: reviewState.intervalDays,
+			easeFactor: reviewState.easeFactor,
+			nextReviewAt: reviewState.nextReviewAt
+				? reviewState.nextReviewAt.getTime()
+				: null,
+		},
+		isRemembered,
+		isMastered,
+	};
+};
+
+// 結果一覧タップ時の解説を取得する。見つからなければ null（未所有・他セット・存在しない語）。
+export const getQuizExplanation = async (
+	db: Db,
+	userId: string,
+	wordSetId: string,
+	wordId: string,
+): Promise<QuizExplainResponse | null> => {
+	const found = await findWordExplanation(db, userId, wordSetId, wordId);
+	if (!found) return null;
+
+	return {
+		wordId: found.id,
+		text: found.text,
+		locationLabel: found.locationLabel,
+		imageKey: found.imageKey,
+		meanings: found.meanings.map((m) => ({
+			id: m.id,
+			slot: m.slot,
+			meaning: m.meaning,
+			partOfSpeech: m.partOfSpeech,
+			phonetic: m.phonetic,
+			example: m.example,
+			collocation: m.collocation,
+			synonym: m.synonym,
+			etymology: m.etymology,
+			source: m.source,
+			isRemembered: m.isRemembered,
+		})),
+	};
 };

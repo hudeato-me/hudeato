@@ -220,9 +220,14 @@ export function Footer({ wordSetId }: { wordSetId?: string }) {
             >
               <BsListUl className="h-5 w-5" />
             </Link>
-            <button type="button" onClick={() => haptic('light')} className="h-10 w-10 flex items-center justify-center" aria-label="単語帳">
+            <Link
+              to="/study"
+              onClick={() => haptic('light')}
+              className={`h-10 w-10 flex items-center justify-center transition-colors ${currentPath === '/study' ? 'text-black' : ''}`}
+              aria-label="学習"
+            >
               <BsBook className="h-5 w-5" />
-            </button>
+            </Link>
           </nav>
           <button
             type="button"

@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ContentRouteImport } from './routes/_content'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ContentStudyRouteImport } from './routes/_content/study'
+import { Route as ContentQuizRouteImport } from './routes/_content/quiz'
 import { Route as ContentListRouteImport } from './routes/_content/list'
 import { Route as ContentDashboardRouteImport } from './routes/_content/dashboard'
 
@@ -29,6 +31,16 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ContentStudyRoute = ContentStudyRouteImport.update({
+  id: '/study',
+  path: '/study',
+  getParentRoute: () => ContentRoute,
+} as any)
+const ContentQuizRoute = ContentQuizRouteImport.update({
+  id: '/quiz',
+  path: '/quiz',
+  getParentRoute: () => ContentRoute,
+} as any)
 const ContentListRoute = ContentListRouteImport.update({
   id: '/list',
   path: '/list',
@@ -45,12 +57,16 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/dashboard': typeof ContentDashboardRoute
   '/list': typeof ContentListRoute
+  '/quiz': typeof ContentQuizRoute
+  '/study': typeof ContentStudyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/dashboard': typeof ContentDashboardRoute
   '/list': typeof ContentListRoute
+  '/quiz': typeof ContentQuizRoute
+  '/study': typeof ContentStudyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -59,12 +75,14 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_content/dashboard': typeof ContentDashboardRoute
   '/_content/list': typeof ContentListRoute
+  '/_content/quiz': typeof ContentQuizRoute
+  '/_content/study': typeof ContentStudyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/dashboard' | '/list'
+  fullPaths: '/' | '/login' | '/dashboard' | '/list' | '/quiz' | '/study'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/dashboard' | '/list'
+  to: '/' | '/login' | '/dashboard' | '/list' | '/quiz' | '/study'
   id:
     | '__root__'
     | '/'
@@ -72,6 +90,8 @@ export interface FileRouteTypes {
     | '/login'
     | '/_content/dashboard'
     | '/_content/list'
+    | '/_content/quiz'
+    | '/_content/study'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -103,6 +123,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_content/study': {
+      id: '/_content/study'
+      path: '/study'
+      fullPath: '/study'
+      preLoaderRoute: typeof ContentStudyRouteImport
+      parentRoute: typeof ContentRoute
+    }
+    '/_content/quiz': {
+      id: '/_content/quiz'
+      path: '/quiz'
+      fullPath: '/quiz'
+      preLoaderRoute: typeof ContentQuizRouteImport
+      parentRoute: typeof ContentRoute
+    }
     '/_content/list': {
       id: '/_content/list'
       path: '/list'
@@ -123,11 +157,15 @@ declare module '@tanstack/react-router' {
 interface ContentRouteChildren {
   ContentDashboardRoute: typeof ContentDashboardRoute
   ContentListRoute: typeof ContentListRoute
+  ContentQuizRoute: typeof ContentQuizRoute
+  ContentStudyRoute: typeof ContentStudyRoute
 }
 
 const ContentRouteChildren: ContentRouteChildren = {
   ContentDashboardRoute: ContentDashboardRoute,
   ContentListRoute: ContentListRoute,
+  ContentQuizRoute: ContentQuizRoute,
+  ContentStudyRoute: ContentStudyRoute,
 }
 
 const ContentRouteWithChildren =

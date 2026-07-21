@@ -1,7 +1,7 @@
-import { and, asc, count, eq, ne, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
-import type { QuizScope } from "@hudeato/schema";
-import { word, wordEmbedding, wordMeaning } from "../../db";
+import type { QuizDirection, QuizScope } from "@hudeato/schema";
+import { quizSession, word, wordEmbedding, wordMeaning, wordSet } from "../../db";
 import { Db } from "../../types/words-route-type";
 import { saveReviewInTx } from "../study/repository";
 
@@ -188,5 +188,85 @@ export const findWordExplanation = async (
 				},
 			},
 		},
+	});
+};
+
+// ---------------------------------------------------------------------------
+// クイズセッション履歴の永続化。
+// ---------------------------------------------------------------------------
+
+// 指定セットがそのユーザーの所有か確認する（認可スコープ用。word-sets 側に相当する
+// 既存クエリが無いためここに新設する）。
+export const findWordSetForUser = async (
+	db: Db,
+	userId: string,
+	wordSetId: string,
+) => {
+	return db.query.wordSet.findFirst({
+		where: and(eq(wordSet.userId, userId), eq(wordSet.id, wordSetId)),
+		columns: { id: true },
+	});
+};
+
+// クイズセッションを1件挿入する。
+// createdAt はレスポンスと一致させるため呼び出し元(service)で採番した値をそのまま保存する
+// （このリポジトリでは .returning() を使わない既存流儀のため、DB default 任せだと
+// 挿入直後の正確な値をレスポンスに使えない）。
+export const insertQuizSession = async (
+	db: Db,
+	params: {
+		id: string;
+		userId: string;
+		wordSetId: string;
+		scope: QuizScope;
+		direction: QuizDirection;
+		timeLimitSeconds: number;
+		correctCount: number;
+		totalCount: number;
+		itemsJson: string;
+		createdAt: Date;
+	},
+) => {
+	await db.insert(quizSession).values(params);
+};
+
+// クイズセッション履歴一覧をサマリ列のみで取得する(itemsJsonは含めない・作成日時降順・limit件)。
+export const findQuizSessions = async (
+	db: Db,
+	userId: string,
+	wordSetId: string,
+	limit: number,
+) => {
+	return db
+		.select({
+			id: quizSession.id,
+			scope: quizSession.scope,
+			direction: quizSession.direction,
+			timeLimitSeconds: quizSession.timeLimitSeconds,
+			correctCount: quizSession.correctCount,
+			totalCount: quizSession.totalCount,
+			createdAt: quizSession.createdAt,
+		})
+		.from(quizSession)
+		.where(
+			and(eq(quizSession.userId, userId), eq(quizSession.wordSetId, wordSetId)),
+		)
+		.orderBy(desc(quizSession.createdAt))
+		.limit(limit);
+};
+
+// クイズセッション1件をitemsJson込みで取得する(結果画面の再表示用)。見つからなければ undefined。
+export const findQuizSessionDetail = async (
+	db: Db,
+	userId: string,
+	wordSetId: string,
+	sessionId: string,
+) => {
+	return db.query.quizSession.findFirst({
+		where: and(
+			eq(quizSession.userId, userId),
+			eq(quizSession.wordSetId, wordSetId),
+			eq(quizSession.id, sessionId),
+		),
 	});
 };

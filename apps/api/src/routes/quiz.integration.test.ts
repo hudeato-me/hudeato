@@ -48,6 +48,10 @@ const otherSetId = "quiz-set-b";
 const otherWordId = "quiz-word-b1";
 const otherMeaningId = "quiz-meaning-b1";
 
+// クイズセッション履歴のPOST単体テスト専用セット。
+// GET一覧の並び順テストで使う setId のセッション件数を汚さないよう分離する。
+const sessionPostOnlySetId = "quiz-set-session-post-only";
+
 beforeAll(async () => {
 	ctx = createTestContext() as TestContext & {
 		_applyMigrations: () => Promise<void>;
@@ -66,6 +70,9 @@ beforeAll(async () => {
 
 	// ログインユーザーのセット・単語
 	await db.insert(wordSet).values({ id: setId, userId: myUserId, name: "Quiz Set A" });
+	await db
+		.insert(wordSet)
+		.values({ id: sessionPostOnlySetId, userId: myUserId, name: "Quiz Set Session Post Only" });
 	await db.insert(word).values([
 		{ id: generationWords.apple, userId: myUserId, wordSetId: setId, text: "apple" },
 		{ id: generationWords.book, userId: myUserId, wordSetId: setId, text: "book" },
@@ -294,5 +301,257 @@ describe("GET /api/v1/quiz/:setId/:wordId/explain", () => {
 			cookie,
 		);
 		expect(res.status).toBe(404);
+	});
+});
+
+// ===========================================================================
+// クイズセッション履歴（結果画面の保存・一覧・再表示）
+// ===========================================================================
+
+describe("クイズセッション履歴", () => {
+	// 正解1問・不正解1問(未回答)のスナップショット。値は毎回新しい配列で作る(参照比較を避ける)。
+	const buildSessionItems = () => [
+		{
+			wordId: generationWords.apple,
+			meaningId: "quiz-meaning-apple",
+			prompt: "apple",
+			selectedText: "りんご",
+			correctText: "りんご",
+			correct: true,
+		},
+		{
+			wordId: generationWords.book,
+			meaningId: "quiz-meaning-book",
+			prompt: "book",
+			selectedText: null,
+			correctText: "本",
+			correct: false,
+		},
+	];
+
+	// 一覧の並び順が挿入順ではなく作成日時降順であることを検証するため、
+	// 間隔を空けて古いセッション→新しいセッションの順に2件作成しておく。
+	let olderSessionId: string;
+	let newerSessionId: string;
+
+	beforeAll(async () => {
+		const olderRes = await requestJson(
+			app,
+			"POST",
+			`/api/v1/quiz/${setId}/sessions`,
+			cookie,
+			{
+				scope: "all",
+				direction: "wordToMeaning",
+				timeLimitSeconds: 10,
+				items: buildSessionItems(),
+			},
+		);
+		const olderBody: Json = await olderRes.json();
+		olderSessionId = olderBody.id;
+
+		// createdAtに差を作り、一覧の並び順テストを挿入順=期待順にしない
+		await new Promise((resolve) => setTimeout(resolve, 10));
+
+		const newerRes = await requestJson(
+			app,
+			"POST",
+			`/api/v1/quiz/${setId}/sessions`,
+			cookie,
+			{
+				scope: "unanswered",
+				direction: "meaningToWord",
+				timeLimitSeconds: 30,
+				items: buildSessionItems(),
+			},
+		);
+		const newerBody: Json = await newerRes.json();
+		newerSessionId = newerBody.id;
+	});
+
+	describe("POST /api/v1/quiz/:setId/sessions", () => {
+		it("未認証は401", async () => {
+			const res = await requestJson(
+				app,
+				"POST",
+				`/api/v1/quiz/${sessionPostOnlySetId}/sessions`,
+				"",
+				{
+					scope: "all",
+					direction: "wordToMeaning",
+					timeLimitSeconds: 20,
+					items: buildSessionItems(),
+				},
+			);
+			expect(res.status).toBe(401);
+		});
+
+		it("不正なbody(itemsが空配列)は400", async () => {
+			const res = await requestJson(
+				app,
+				"POST",
+				`/api/v1/quiz/${sessionPostOnlySetId}/sessions`,
+				cookie,
+				{ scope: "all", direction: "wordToMeaning", timeLimitSeconds: 20, items: [] },
+			);
+			expect(res.status).toBe(400);
+		});
+
+		it("正常系: itemsからcorrectCount/totalCountが算出され201で返る", async () => {
+			const res = await requestJson(
+				app,
+				"POST",
+				`/api/v1/quiz/${sessionPostOnlySetId}/sessions`,
+				cookie,
+				{
+					scope: "all",
+					direction: "wordToMeaning",
+					timeLimitSeconds: 20,
+					items: buildSessionItems(),
+				},
+			);
+			expect(res.status).toBe(201);
+			const body: Json = await res.json();
+			expect(typeof body.id).toBe("string");
+			expect(body.scope).toBe("all");
+			expect(body.direction).toBe("wordToMeaning");
+			expect(body.timeLimitSeconds).toBe(20);
+			expect(body.correctCount).toBe(1);
+			expect(body.totalCount).toBe(2);
+			expect(typeof body.createdAt).toBe("number");
+		});
+
+		it("他ユーザーのセットは404（認可スコープ）", async () => {
+			const res = await requestJson(
+				app,
+				"POST",
+				`/api/v1/quiz/${otherSetId}/sessions`,
+				cookie,
+				{
+					scope: "all",
+					direction: "wordToMeaning",
+					timeLimitSeconds: 20,
+					items: buildSessionItems(),
+				},
+			);
+			expect(res.status).toBe(404);
+		});
+	});
+
+	describe("GET /api/v1/quiz/:setId/sessions", () => {
+		it("未認証は401", async () => {
+			const res = await requestJson(app, "GET", `/api/v1/quiz/${setId}/sessions`, "");
+			expect(res.status).toBe(401);
+		});
+
+		it("正常系: 作成日時降順で返り、itemsJson/itemsを含まない軽量サマリになる", async () => {
+			const res = await requestJson(app, "GET", `/api/v1/quiz/${setId}/sessions`, cookie);
+			expect(res.status).toBe(200);
+			const body: Json = await res.json();
+			const ids = body.map((s: Json) => s.id);
+			// 新しい順であること(挿入順どおりなら older が先に来てしまう)
+			expect(ids.indexOf(newerSessionId)).toBeLessThan(ids.indexOf(olderSessionId));
+			for (const session of body) {
+				expect(session).not.toHaveProperty("itemsJson");
+				expect(session).not.toHaveProperty("items");
+			}
+		});
+
+		it("limitで件数が絞られ、新しい順の上位が返る", async () => {
+			const res = await requestJson(
+				app,
+				"GET",
+				`/api/v1/quiz/${setId}/sessions?limit=1`,
+				cookie,
+			);
+			expect(res.status).toBe(200);
+			const body: Json = await res.json();
+			expect(body).toHaveLength(1);
+			expect(body[0].id).toBe(newerSessionId);
+		});
+
+		it("他ユーザーのセットは空配列(study/quizの他エンドポイントと同方針、追加の所有チェックはしない)", async () => {
+			const res = await requestJson(app, "GET", `/api/v1/quiz/${otherSetId}/sessions`, cookie);
+			expect(res.status).toBe(200);
+			const body: Json = await res.json();
+			expect(body).toEqual([]);
+		});
+	});
+
+	describe("GET /api/v1/quiz/:setId/sessions/:sessionId", () => {
+		it("未認証は401", async () => {
+			const res = await requestJson(
+				app,
+				"GET",
+				`/api/v1/quiz/${setId}/sessions/${newerSessionId}`,
+				"",
+			);
+			expect(res.status).toBe(401);
+		});
+
+		it("正常系: itemsを含む詳細が返る(過去の結果画面の再表示用)", async () => {
+			const res = await requestJson(
+				app,
+				"GET",
+				`/api/v1/quiz/${setId}/sessions/${newerSessionId}`,
+				cookie,
+			);
+			expect(res.status).toBe(200);
+			const body: Json = await res.json();
+			expect(body.id).toBe(newerSessionId);
+			expect(body.scope).toBe("unanswered");
+			expect(body.direction).toBe("meaningToWord");
+			expect(body.timeLimitSeconds).toBe(30);
+			expect(body.items).toEqual(buildSessionItems());
+		});
+
+		it("存在しないセッションIDは404", async () => {
+			const res = await requestJson(
+				app,
+				"GET",
+				`/api/v1/quiz/${setId}/sessions/no-such-session`,
+				cookie,
+			);
+			expect(res.status).toBe(404);
+		});
+
+		it("他ユーザーのセットで自分のセッションIDを指定しても404（認可スコープ）", async () => {
+			const res = await requestJson(
+				app,
+				"GET",
+				`/api/v1/quiz/${otherSetId}/sessions/${newerSessionId}`,
+				cookie,
+			);
+			expect(res.status).toBe(404);
+		});
+	});
+
+	describe("既存の /:setId/:wordId/explain とのルート解決衝突がないこと", () => {
+		it("sessions系のURLはexplainに誤マッチせずセッション詳細として解決される", async () => {
+			const res = await requestJson(
+				app,
+				"GET",
+				`/api/v1/quiz/${setId}/sessions/${newerSessionId}`,
+				cookie,
+			);
+			expect(res.status).toBe(200);
+			const body: Json = await res.json();
+			// explainレスポンスの形(meanings)ではなく、セッション詳細の形(items)であること
+			expect(body).toHaveProperty("items");
+			expect(body).not.toHaveProperty("meanings");
+		});
+
+		it("既存のexplainルートはsessions系に飲まれず引き続き正しく解決される", async () => {
+			const res = await requestJson(
+				app,
+				"GET",
+				`/api/v1/quiz/${setId}/${explainWordId}/explain`,
+				cookie,
+			);
+			expect(res.status).toBe(200);
+			const body: Json = await res.json();
+			expect(body).toHaveProperty("meanings");
+			expect(body).not.toHaveProperty("items");
+		});
 	});
 });

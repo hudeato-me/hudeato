@@ -226,3 +226,52 @@ export const QuizExplainResponseSchema = z.object({
 	meanings: z.array(QuizExplainMeaningSchema),
 });
 export type QuizExplainResponse = z.infer<typeof QuizExplainResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// クイズセッション履歴(P2)の共有スキーマ
+// 結果画面のセッション(正解数・各問の回答内容)をサーバーに保存し、開始画面の履歴一覧・
+// 過去の結果画面の再表示に使う。review_log(学習記録)とは役割が別で、
+// こちらは表示用にテキストをデノーマライズしたスナップショットを保持する。
+// ---------------------------------------------------------------------------
+
+// クイズの制限時間（秒）。開始画面で 10/20/30 から選ぶ。
+export const QuizTimeLimitSchema = z.union([z.literal(10), z.literal(20), z.literal(30)]);
+export type QuizTimeLimit = z.infer<typeof QuizTimeLimitSchema>;
+
+// セッション内の1問分の表示用スナップショット。selectedText が null は時間切れ(未回答)。
+export const QuizSessionItemSchema = z.object({
+	wordId: z.string(),
+	meaningId: z.string(),
+	prompt: z.string(),
+	selectedText: z.string().nullable(),
+	correctText: z.string(),
+	correct: z.boolean(),
+});
+export type QuizSessionItem = z.infer<typeof QuizSessionItemSchema>;
+
+// POST /quiz/:setId/sessions のリクエスト。correctCount/totalCountはサーバー側でitemsから算出する。
+export const QuizSessionCreateRequestSchema = z.object({
+	scope: QuizScopeSchema,
+	direction: QuizDirectionSchema,
+	timeLimitSeconds: QuizTimeLimitSchema,
+	items: z.array(QuizSessionItemSchema).min(1).max(20),
+});
+export type QuizSessionCreateRequest = z.infer<typeof QuizSessionCreateRequestSchema>;
+
+// 履歴一覧の1件(itemsは含めない軽量サマリ)
+export const QuizSessionSummarySchema = z.object({
+	id: z.string(),
+	scope: QuizScopeSchema,
+	direction: QuizDirectionSchema,
+	timeLimitSeconds: z.number().int(),
+	correctCount: z.number().int().nonnegative(),
+	totalCount: z.number().int().positive(),
+	createdAt: z.number(), // epoch ms
+});
+export type QuizSessionSummary = z.infer<typeof QuizSessionSummarySchema>;
+
+// GET /quiz/:setId/sessions/:sessionId のレスポンス(過去の結果画面の再表示用)
+export const QuizSessionDetailSchema = QuizSessionSummarySchema.extend({
+	items: z.array(QuizSessionItemSchema),
+});
+export type QuizSessionDetail = z.infer<typeof QuizSessionDetailSchema>;

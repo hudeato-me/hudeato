@@ -1,17 +1,26 @@
-import type {
-	QuizAnswerRequest,
-	QuizDirection,
-	QuizExplainResponse,
-	QuizQuestion,
-	QuizResponse,
-	QuizScope,
-	ReviewState,
+import { z } from "zod";
+import {
+	QuizSessionItemSchema,
+	type QuizAnswerRequest,
+	type QuizDirection,
+	type QuizExplainResponse,
+	type QuizQuestion,
+	type QuizResponse,
+	type QuizScope,
+	type QuizSessionDetail,
+	type QuizSessionItem,
+	type QuizSessionSummary,
+	type QuizTimeLimit,
+	type ReviewState,
 } from "@hudeato/schema";
 import { Db } from "../../types/words-route-type";
 import {
 	findNearestWordIdsForWord,
 	findQuizCandidates,
+	findQuizSessionDetail,
+	findQuizSessions,
 	findWordExplanation,
+	insertQuizSession,
 	saveQuizAnswer,
 	type QuizCandidate,
 } from "./repository";
@@ -256,5 +265,106 @@ export const getQuizExplanation = async (
 			source: m.source,
 			isRemembered: m.isRemembered,
 		})),
+	};
+};
+
+// ---------------------------------------------------------------------------
+// クイズセッション履歴の記録・取得。
+// ---------------------------------------------------------------------------
+
+// クイズセッションを記録する。correctCount/totalCount は items から算出し、
+// 各問の表示用テキストは items に含まれるスナップショットをそのままJSON化して保存する
+// （単語が後で編集・削除されても結果画面の表示が崩れないようにするため）。
+// 呼び出し側で対象セットの所有確認を済ませている前提（study/quiz の他エンドポイントと同様）。
+export const recordQuizSession = async (
+	db: Db,
+	params: {
+		userId: string;
+		wordSetId: string;
+		scope: QuizScope;
+		direction: QuizDirection;
+		timeLimitSeconds: QuizTimeLimit;
+		items: QuizSessionItem[];
+	},
+): Promise<QuizSessionSummary> => {
+	const id = crypto.randomUUID();
+	// レスポンスと保存値を一致させるため、ここで採番した時刻をそのままinsertに使う
+	const createdAt = new Date();
+	const correctCount = params.items.filter((item) => item.correct).length;
+	const totalCount = params.items.length;
+
+	await insertQuizSession(db, {
+		id,
+		userId: params.userId,
+		wordSetId: params.wordSetId,
+		scope: params.scope,
+		direction: params.direction,
+		timeLimitSeconds: params.timeLimitSeconds,
+		correctCount,
+		totalCount,
+		itemsJson: JSON.stringify(params.items),
+		createdAt,
+	});
+
+	return {
+		id,
+		scope: params.scope,
+		direction: params.direction,
+		timeLimitSeconds: params.timeLimitSeconds,
+		correctCount,
+		totalCount,
+		createdAt: createdAt.getTime(),
+	};
+};
+
+// クイズセッション履歴一覧を取得する（新しい順、最大 limit 件。itemsは含まない軽量サマリ）。
+export const getQuizSessions = async (
+	db: Db,
+	userId: string,
+	wordSetId: string,
+	limit: number,
+): Promise<QuizSessionSummary[]> => {
+	const rows = await findQuizSessions(db, userId, wordSetId, limit);
+	return rows.map((row) => ({
+		id: row.id,
+		scope: row.scope,
+		direction: row.direction,
+		timeLimitSeconds: row.timeLimitSeconds,
+		correctCount: row.correctCount,
+		totalCount: row.totalCount,
+		createdAt: row.createdAt.getTime(),
+	}));
+};
+
+// クイズセッション1件の詳細（結果画面の再表示用）を取得する。見つからなければ null。
+// itemsJson は保存時にサーバー側で生成したJSONのため通常は壊れないが、将来のスキーマ変更や
+// 想定外の直接書き込みで壊れていた場合に一覧・件数表示まで巻き込んで壊さないよう、
+// safeParse に失敗したら items: [] を返す防御的な実装にする。
+export const getQuizSessionDetail = async (
+	db: Db,
+	userId: string,
+	wordSetId: string,
+	sessionId: string,
+): Promise<QuizSessionDetail | null> => {
+	const row = await findQuizSessionDetail(db, userId, wordSetId, sessionId);
+	if (!row) return null;
+
+	let items: QuizSessionItem[] = [];
+	try {
+		const parsed = z.array(QuizSessionItemSchema).safeParse(JSON.parse(row.itemsJson));
+		if (parsed.success) items = parsed.data;
+	} catch {
+		// JSON.parse自体が失敗した場合も items: [] にフォールバックする
+	}
+
+	return {
+		id: row.id,
+		scope: row.scope,
+		direction: row.direction,
+		timeLimitSeconds: row.timeLimitSeconds,
+		correctCount: row.correctCount,
+		totalCount: row.totalCount,
+		createdAt: row.createdAt.getTime(),
+		items,
 	};
 };

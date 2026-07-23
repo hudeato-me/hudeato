@@ -25,8 +25,7 @@ export const Route = createFileRoute('/_content/quiz')({
 type QuizPhase = 'config' | 'playing' | 'result' | 'history'
 
 function QuizPage() {
-    const { selectedWordSetId, wordSets } = useContentContext()
-    const selectedWordSetName = wordSets.find((s) => s.id === selectedWordSetId)?.name ?? ''
+    const { selectedWordSetId } = useContentContext()
     const invalidateWordsAfterQuiz = useInvalidateWordsAfterQuiz()
 
     const [phase, setPhase] = useState<QuizPhase>('config')
@@ -154,7 +153,6 @@ function QuizPage() {
                 <PhaseTransition key="config">
                     <QuizConfigScreen
                         wordSetId={selectedWordSetId}
-                        wordSetName={selectedWordSetName}
                         scope={scope}
                         direction={direction}
                         count={count}

@@ -5,7 +5,6 @@ import type { QuizDirection, QuizScope, QuizTimeLimit } from '~/types'
 
 interface QuizConfigScreenProps {
     wordSetId: string
-    wordSetName: string
     scope: QuizScope
     direction: QuizDirection
     count: number
@@ -28,7 +27,6 @@ interface QuizConfigScreenProps {
 // クイズ開始画面。出題範囲・出題形式・問題数・制限時間を選び、大きな開始ボタンで生成をキックする。
 export function QuizConfigScreen({
     wordSetId,
-    wordSetName,
     scope,
     direction,
     count,
@@ -46,11 +44,6 @@ export function QuizConfigScreen({
 }: QuizConfigScreenProps) {
     return (
         <div className="space-y-8">
-            <section className="space-y-1 px-1">
-                <h1 className="text-[1.05rem] font-medium text-black/85">4択クイズ</h1>
-                {wordSetName && <p className="text-sm text-black/40">{wordSetName} から出題</p>}
-            </section>
-
             <section className="space-y-3">
                 <div className="text-sm text-black/50 px-1">出題範囲</div>
                 <FilterTabs

@@ -88,9 +88,11 @@ function QuizQuestionCard({
     const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const barControlsRef = useRef<ReturnType<typeof animate> | null>(null)
 
-    // 1秒のフィードバック表示のあと、表示用レコードを組み立てて親に渡す。
+    // 正誤フィードバックを一拍(400ms)見せたあと、表示用レコードを組み立てて親に渡す
+    // （テンポ優先で静止時間は最小限。アニメーション自体は速めない）。
     // タイマーは ref に保持し、フィードバック中に「やめる」等でアンマウントされた場合は
     // クリーンアップで破棄する（config に戻った後に回答記録が誤発火するのを防ぐ）
+    const FEEDBACK_DELAY_MS = 400
     const submitAfterDelay = (selectedText: string | null, correct: boolean) => {
         feedbackTimeoutRef.current = setTimeout(() => {
             onAnswer({
@@ -101,7 +103,7 @@ function QuizQuestionCard({
                 correctText: question.choices[question.correctIndex],
                 correct,
             })
-        }, 1000)
+        }, FEEDBACK_DELAY_MS)
     }
 
     const handleTimeout = () => {

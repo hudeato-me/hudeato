@@ -17,7 +17,7 @@ export type QuizCandidate = {
 
 // クイズの出題候補(単語×意味)を取得する。
 // scope=all        … セット内の全ての意味
-// scope=unanswered … 未正解(word_meaning.isRemembered=false)の意味のみ
+// scope=unanswered … 未習得(word_meaning.isRemembered=false)の意味のみ
 // userId / wordSetId スコープで必ず絞り、登録順(word.createdAt昇順→slot昇順)で安定させる。
 // 意味が空文字の行は候補として不適切なため除外する。
 // テキストは trim して返し、選択肢の重複判定・表示が同じ正規化を共有できるようにする。

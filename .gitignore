@@ -33,4 +33,5 @@ coverage
 .claude/*
 !.claude/skills/
 
-bash.exe.stackdump.DS_Store
+bash.exe.stackdump
+.DS_Store

@@ -9,7 +9,7 @@ interface QuizHistorySectionProps {
 
 const SCOPE_LABEL: Record<QuizSessionSummary['scope'], string> = {
     all: 'すべて',
-    unanswered: '未正解',
+    unanswered: '未習得',
 }
 
 const DIRECTION_LABEL: Record<QuizSessionSummary['direction'], string> = {

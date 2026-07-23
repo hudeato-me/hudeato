@@ -155,7 +155,7 @@ export type WordRecompleteRequest = z.infer<typeof WordRecompleteRequestSchema>;
 export const QuizDirectionSchema = z.enum(["wordToMeaning", "meaningToWord"]);
 export type QuizDirection = z.infer<typeof QuizDirectionSchema>;
 
-// 出題範囲。all=セット内全ての意味 / unanswered=未正解(word_meaning.isRemembered=false)の意味のみ
+// 出題範囲。all=セット内全ての意味 / unanswered=未習得(word_meaning.isRemembered=false)の意味のみ
 export const QuizScopeSchema = z.enum(["all", "unanswered"]);
 export type QuizScope = z.infer<typeof QuizScopeSchema>;
 

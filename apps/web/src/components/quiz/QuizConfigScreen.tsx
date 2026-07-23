@@ -55,7 +55,7 @@ export function QuizConfigScreen({
                 <FilterTabs
                     options={[
                         { value: 'all' as const, label: 'すべて' },
-                        { value: 'unanswered' as const, label: '未正解' },
+                        { value: 'unanswered' as const, label: '未習得' },
                     ]}
                     value={scope}
                     onChange={onScopeChange}
@@ -130,7 +130,7 @@ export function QuizConfigScreen({
             {emptyState === 'unanswered' && (
                 <div className="rounded-[14px] bg-green-500/5 border border-green-500/20 p-4 text-center space-y-2">
                     <p className="text-[14px] text-green-700 leading-snug">
-                        未正解の言葉はありません。ぜんぶ覚えています 🎉
+                        未習得の言葉はありません。ぜんぶ覚えています 🎉
                     </p>
                     <button
                         type="button"

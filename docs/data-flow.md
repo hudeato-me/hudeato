@@ -121,6 +121,11 @@ sequenceDiagram
     API->>DB: 正誤記録・次回スケジュール更新
 ```
 
+補足:
+
+- 回答は `POST /quiz/:setId/answer` が `review_log` 記録と `isRemembered`/`isMastered` の更新を同一トランザクションで行う。
+- セッション結果は `quiz_session` に表示用スナップショットとして保存され、履歴一覧・再表示に使う。
+- 発音音声は `GET /tts` が Google Cloud Text-to-Speech を呼び出し、結果を Workers KV に30日キャッシュする。
 
 ### 画像アップロード
 

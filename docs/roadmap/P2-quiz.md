@@ -2,7 +2,7 @@
 
 > セットの言葉で4択クイズ。ダミー選択肢は**ベクトル近傍**で意味的に紛らわしい語を選ぶ。終了後に正誤一覧と解説。
 
-> **注記（2026-07）**: `correctIndex` はクライアント側正誤判定の決定によりレスポンスに含める（本文表の「非送出」記載は計画当時のもの）。出題方向 `direction=wordToMeaning|meaningToWord` をユーザー指定で追加した。`scope=unanswered` は `word_meaning.isRemembered` ベースで、正解→`true` / 不正解→`false` に更新される。
+> **注記（2026-07）**: `correctIndex` はクライアント側正誤判定の決定によりレスポンスに含める（本文表の「非送出」記載は計画当時のもの）。出題方向 `direction=wordToMeaning|meaningToWord` をユーザー指定で追加した。`scope=unanswered` は `word_meaning.isRemembered` ベースで、正解→`true` / 不正解→`false` に更新される。`quiz_session`（本文では「MVPでは不要」としていた）はセッション履歴表示のため実装済み。制限時間（各問10/20/30秒）・発音音声（Google Cloud TTS）・セッション履歴一覧・学習ハブ（`/study`）は計画外の追加実装。UI表記は「未正解」ではなく「未習得」を採用する。
 
 - **依存**: P0（出題対象・review API・ベクトル列）, P1（埋め込み生成）
 - **領域**: `server` / `webfront`

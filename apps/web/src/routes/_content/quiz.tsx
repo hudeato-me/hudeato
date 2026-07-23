@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { QuizConfigScreen } from '~/components/quiz/QuizConfigScreen'
 import { QuizPlayingScreen } from '~/components/quiz/QuizPlayingScreen'
 import { QuizResultScreen } from '~/components/quiz/QuizResultScreen'
@@ -25,10 +25,17 @@ export const Route = createFileRoute('/_content/quiz')({
 type QuizPhase = 'config' | 'playing' | 'result' | 'history'
 
 function QuizPage() {
-    const { selectedWordSetId } = useContentContext()
+    const { selectedWordSetId, setImmersive } = useContentContext()
     const invalidateWordsAfterQuiz = useInvalidateWordsAfterQuiz()
 
     const [phase, setPhase] = useState<QuizPhase>('config')
+
+    // playingフェーズの間だけレイアウトのHeader/Footerを退場させる（没入モード）。
+    // フェーズが変わった瞬間・アンマウント時には必ずOFFに戻す（クリーンアップ漏れ厳禁）。
+    useEffect(() => {
+        setImmersive(phase === 'playing')
+        return () => setImmersive(false)
+    }, [phase, setImmersive])
     // 出題設定
     const [scope, setScope] = useState<QuizScope>('all')
     const [direction, setDirection] = useState<QuizDirection>('wordToMeaning')

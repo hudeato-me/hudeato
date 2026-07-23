@@ -1,7 +1,7 @@
 import { AnimatePresence, motion, useAnimate } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { BsVolumeMute, BsVolumeUp } from 'react-icons/bs'
+import { BsVolumeMute, BsVolumeUp, BsX } from 'react-icons/bs'
 import { ttsLangForDirection, useTtsPlayer, useVoiceEnabled, type TtsLang } from '~/hooks/use-tts'
 import { haptic } from '~/lib/haptic'
 import type { QuizDirection, QuizQuestion, QuizSessionItem, QuizTimeLimit } from '~/types'
@@ -35,8 +35,11 @@ export function QuizPlayingScreen({
     const { play, stop } = useTtsPlayer()
 
     return (
-        <div className="space-y-6">
-            {/* ヘッダー: やめる導線 + 音声トグル + プログレス */}
+        // 没入モード（Header/Footerを隠す）で消えた縦幅を、このコンテナ自体の高さで埋める。
+        // 100dvhからコンテナのpt-5(1.25rem)と_content.tsx側のimmersive時下余白(pb-4=1rem)を
+        // 差し引いた高さ。値を変える場合は_content.tsxのimmersive時paddingと同期させること。
+        <div className="flex flex-col gap-6 pb-16 min-h-[calc(100dvh_-_1.25rem_-_1rem)]">
+            {/* ヘッダー: 閉じるボタン + プログレス（音声トグルはプロンプトカード右上角） */}
             <div className="space-y-3">
                 <div className="flex items-center justify-between">
                     <button
@@ -45,30 +48,14 @@ export function QuizPlayingScreen({
                             haptic('light')
                             onQuit()
                         }}
-                        className="text-[13px] text-black/35 px-2 py-1 -ml-2 active:opacity-50 transition-opacity"
+                        aria-label="クイズをやめる"
+                        className="h-12 w-12 rounded-full flex items-center justify-center bg-white/60 backdrop-blur-xl border border-black/[0.06] shadow-sm text-black/70 active:scale-90 transition"
                     >
-                        やめる
+                        <BsX className="h-6 w-6" />
                     </button>
-                    <div className="flex items-center gap-3">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                haptic('light')
-                                // OFFにした瞬間に再生中の音声を即停止する
-                                if (voiceEnabled) stop()
-                                toggleVoice()
-                            }}
-                            aria-label={voiceEnabled ? '音声をオフにする' : '音声をオンにする'}
-                            aria-pressed={voiceEnabled}
-                            className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${voiceEnabled ? 'bg-blue-500/10 text-blue-500' : 'bg-black/[0.05] text-black/30'
-                                }`}
-                        >
-                            {voiceEnabled ? <BsVolumeUp className="h-4 w-4" /> : <BsVolumeMute className="h-4 w-4" />}
-                        </button>
-                        <span className="text-[13px] text-black/40 tabular-nums">
-                            {currentIndex + 1} / {total}
-                        </span>
-                    </div>
+                    <span className="text-[13px] text-black/40 tabular-nums">
+                        {currentIndex + 1} / {total}
+                    </span>
                 </div>
                 <div className="h-1 w-full bg-black/[0.06] rounded-full overflow-hidden">
                     <motion.div
@@ -87,6 +74,12 @@ export function QuizPlayingScreen({
                     timeLimitSeconds={timeLimitSeconds}
                     direction={direction}
                     voiceEnabled={voiceEnabled}
+                    onToggleVoice={() => {
+                        haptic('light')
+                        // OFFにした瞬間に再生中の音声を即停止する
+                        if (voiceEnabled) stop()
+                        toggleVoice()
+                    }}
                     play={play}
                     stop={stop}
                     onAnswer={onAnswer}
@@ -104,6 +97,7 @@ function QuizQuestionCard({
     timeLimitSeconds,
     direction,
     voiceEnabled,
+    onToggleVoice,
     play,
     stop,
     onAnswer,
@@ -112,6 +106,7 @@ function QuizQuestionCard({
     timeLimitSeconds: QuizTimeLimit
     direction: QuizDirection
     voiceEnabled: boolean
+    onToggleVoice: () => void
     play: (text: string, lang: TtsLang) => void
     stop: () => void
     onAnswer: (item: QuizSessionItem) => void
@@ -218,12 +213,23 @@ function QuizQuestionCard({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-            className="space-y-6"
+            className="flex-1 flex flex-col gap-6 min-h-0"
         >
             {/* プロンプトカード: 長文の意味でも崩れないよう中央寄せ・可変高さ。
-                発音の自動再生・停止は上部ヘッダーの音声トグルで一括管理する（このカード単体には
-                再生ボタンを持たない） */}
-            <div className="rounded-3xl border border-black/5 bg-black/[0.02] backdrop-blur-xl px-6 py-10 flex items-center justify-center text-center min-h-[140px]">
+                flex-1で余った縦幅を吸収し、選択肢群をその下へ押し下げる（min-h-[140px]は下限として維持）。
+                右上角の音声トグル（アイコンのみ。ON=黒/OFF=灰）で自動再生・停止を一括管理する */}
+            <div className="relative flex-1 rounded-3xl border border-black/5 bg-black/[0.02] backdrop-blur-xl px-6 py-10 flex items-center justify-center text-center min-h-[140px]">
+                <button
+                    type="button"
+                    onClick={onToggleVoice}
+                    aria-label={voiceEnabled ? '音声をオフにする' : '音声をオンにする'}
+                    aria-pressed={voiceEnabled}
+                    className={`absolute top-2.5 right-2.5 p-2.5 transition-all active:scale-90 ${
+                        voiceEnabled ? 'text-black/75' : 'text-black/25'
+                    }`}
+                >
+                    {voiceEnabled ? <BsVolumeUp className="h-5 w-5" /> : <BsVolumeMute className="h-5 w-5" />}
+                </button>
                 <p className="text-[1.35rem] leading-snug font-medium text-black/85 break-words">
                     {question.prompt}
                 </p>
@@ -271,7 +277,7 @@ function QuizQuestionCard({
                 ImagePicker のライトボックスと同じ理由で body 直下に Portal する。 */}
             {typeof document !== 'undefined' &&
                 createPortal(
-                    <div className="fixed left-1/2 -translate-x-1/2 bottom-[76px] w-[430px] max-w-[calc(100vw-16px)] px-3 z-40 pointer-events-none">
+                    <div className="fixed left-1/2 -translate-x-1/2 bottom-[calc(env(safe-area-inset-bottom)_+_16px)] w-[430px] max-w-[calc(100vw-16px)] px-3 z-40 pointer-events-none">
                         <div className="h-1.5 w-full bg-black/[0.06] rounded-full overflow-hidden">
                             <div
                                 ref={scope}

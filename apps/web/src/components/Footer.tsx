@@ -5,7 +5,7 @@ import { BsSearch, BsHouseDoor, BsListUl, BsBook, BsX, BsArrowRight } from 'reac
 import { useSearchWords } from '~/hooks/use-words'
 import { WordEntryDrawer } from './WordEntryDrawer'
 
-export function Footer({ wordSetId }: { wordSetId?: string }) {
+export function Footer({ wordSetId, immersive = false }: { wordSetId?: string; immersive?: boolean }) {
   interface SuggestionItem {
     word: string
     meaning: string
@@ -189,8 +189,9 @@ export function Footer({ wordSetId }: { wordSetId?: string }) {
       </div>
 
       <footer
-        className={`fixed left-1/2 -translate-x-1/2 bottom-4 w-[430px] max-w-[calc(100vw-16px)] px-3 z-50 transition-all duration-200 ${searchMode ? 'opacity-0 translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0 pointer-events-auto'
+        className={`fixed left-1/2 -translate-x-1/2 bottom-4 w-[430px] max-w-[calc(100vw-16px)] px-3 z-50 transition-all duration-200 ${searchMode || immersive ? 'opacity-0 translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0 pointer-events-auto'
           }`}
+        inert={immersive}
       >
         <div className="flex items-center justify-center gap-2">
           <button

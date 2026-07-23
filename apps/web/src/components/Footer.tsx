@@ -191,7 +191,7 @@ export function Footer({ wordSetId, immersive = false }: { wordSetId?: string; i
       <footer
         className={`fixed left-1/2 -translate-x-1/2 bottom-4 w-[430px] max-w-[calc(100vw-16px)] px-3 z-50 transition-all duration-200 ${searchMode || immersive ? 'opacity-0 translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0 pointer-events-auto'
           }`}
-        inert={immersive}
+        inert={searchMode || immersive}
       >
         <div className="flex items-center justify-center gap-2">
           <button

@@ -134,7 +134,13 @@ async function writeTtsCache(
 	}
 }
 
-// base64文字列を音声バイト列に変換する（nodejs_compatが有効なWorkersランタイムでもNode(vitest)でも動く）。
+// base64文字列を音声バイト列に変換する。
+// Workersランタイムには Buffer が無いため、Web標準の atob を使う（Node(vitest)にも存在する）。
 function base64ToBytes(base64: string): Uint8Array {
-	return new Uint8Array(Buffer.from(base64, "base64"));
+	const binary = atob(base64);
+	const bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i++) {
+		bytes[i] = binary.charCodeAt(i);
+	}
+	return bytes;
 }

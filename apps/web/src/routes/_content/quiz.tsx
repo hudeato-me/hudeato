@@ -186,6 +186,7 @@ function QuizPage() {
                         currentIndex={currentIndex}
                         total={questions.length}
                         timeLimitSeconds={timeLimit}
+                        direction={direction}
                         onAnswer={handleAnswer}
                         onQuit={handleQuit}
                     />

@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BsCheck, BsX } from 'react-icons/bs'
+import { WordEntryDrawer } from '~/components/WordEntryDrawer'
+import { useInvalidateQuizAfterWordEdit } from '~/hooks/use-quiz'
 import { haptic } from '~/lib/haptic'
 import { QuizExplainSheet } from './QuizExplainSheet'
 import { QuizSpinner } from './QuizSpinner'
@@ -28,6 +30,32 @@ interface QuizResultScreenProps {
 // ライブ結果・過去履歴の再表示の両方から呼ばれる（表示用レコード配列を受けるだけの純表示コンポーネント）。
 export function QuizResultScreen({ wordSetId, items, footer }: QuizResultScreenProps) {
     const [explainWordId, setExplainWordId] = useState<string | null>(null)
+    // 解説シートの「編集」から開く単語編集ドロワー
+    const [editingWordId, setEditingWordId] = useState<string | null>(null)
+    const invalidateAfterWordEdit = useInvalidateQuizAfterWordEdit(wordSetId)
+    // 解説シートを閉じるアニメーション(300ms)が終わってから編集ドロワーを開くためのタイマー
+    const editOpenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    useEffect(() => {
+        return () => {
+            if (editOpenTimeoutRef.current) clearTimeout(editOpenTimeoutRef.current)
+        }
+    }, [])
+
+    // 解説シートの編集ボタン: 二重シートを避けるため、解説シートを閉じてから編集ドロワーを開く
+    const handleEditFromExplain = (wordId: string) => {
+        setExplainWordId(null)
+        editOpenTimeoutRef.current = setTimeout(() => {
+            setEditingWordId(wordId)
+        }, 300)
+    }
+
+    // 編集ドロワーを閉じたタイミングで解説・履歴詳細のキャッシュを無効化する
+    // （解説シートには戻らず結果画面に戻る）
+    const handleCloseEdit = () => {
+        if (editingWordId) invalidateAfterWordEdit(editingWordId)
+        setEditingWordId(null)
+    }
 
     const total = items.length
     const correctCount = items.filter((item) => item.correct).length
@@ -141,6 +169,14 @@ export function QuizResultScreen({ wordSetId, items, footer }: QuizResultScreenP
                 onClose={() => setExplainWordId(null)}
                 wordSetId={wordSetId}
                 wordId={explainWordId}
+                onEdit={handleEditFromExplain}
+            />
+
+            <WordEntryDrawer
+                isOpen={editingWordId !== null}
+                onClose={handleCloseEdit}
+                wordSetId={wordSetId}
+                existingWordId={editingWordId}
             />
         </div>
     )

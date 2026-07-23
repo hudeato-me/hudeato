@@ -1,4 +1,6 @@
+import { BsPencil } from 'react-icons/bs'
 import { useQuizExplanation } from '~/hooks/use-quiz'
+import { haptic } from '~/lib/haptic'
 import type { QuizExplainMeaning } from '~/types'
 
 interface QuizExplainSheetProps {
@@ -6,11 +8,13 @@ interface QuizExplainSheetProps {
     onClose: () => void
     wordSetId: string
     wordId: string | null
+    // 編集ボタンタップ時。呼び出し側で解説シートを閉じ、編集ドロワーを開く
+    onEdit: (wordId: string) => void
 }
 
 // 結果一覧タップ時の解説ボトムシート。WordEntryDrawer と同じ様式
 // （オーバーレイ + rounded-t-3xl + ドラッグハンドル）に合わせる。
-export function QuizExplainSheet({ isOpen, onClose, wordSetId, wordId }: QuizExplainSheetProps) {
+export function QuizExplainSheet({ isOpen, onClose, wordSetId, wordId, onEdit }: QuizExplainSheetProps) {
     const { data: explain, isLoading, isError } = useQuizExplanation(wordSetId, wordId ?? '', isOpen && !!wordId)
 
     return (
@@ -47,11 +51,24 @@ export function QuizExplainSheet({ isOpen, onClose, wordSetId, wordId }: QuizExp
                         <ExplainSkeleton />
                     ) : (
                         <>
-                            <div className="space-y-1">
-                                <h2 className="text-[1.4rem] font-medium text-black/85">{explain.text}</h2>
-                                {explain.locationLabel && (
-                                    <p className="text-[13px] text-black/40">{explain.locationLabel}</p>
-                                )}
+                            <div className="flex items-start justify-between gap-2">
+                                <div className="space-y-1 min-w-0">
+                                    <h2 className="text-[1.4rem] font-medium text-black/85">{explain.text}</h2>
+                                    {explain.locationLabel && (
+                                        <p className="text-[13px] text-black/40">{explain.locationLabel}</p>
+                                    )}
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        haptic('light')
+                                        if (wordId) onEdit(wordId)
+                                    }}
+                                    aria-label="単語を編集"
+                                    className="shrink-0 -mr-2 -mt-1 w-11 h-11 rounded-full flex items-center justify-center text-black/35 active:bg-black/5 active:scale-90 transition-all"
+                                >
+                                    <BsPencil className="h-[18px] w-[18px]" />
+                                </button>
                             </div>
 
                             <div className="space-y-4">

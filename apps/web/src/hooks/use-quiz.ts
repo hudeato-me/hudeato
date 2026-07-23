@@ -91,6 +91,16 @@ export const useInvalidateWordsAfterQuiz = () => {
 	};
 };
 
+// 解説シート経由の単語編集後に呼ぶ無効化フック。
+// 意味が変わりうるため、解説キャッシュと（sessionsをprefixに持つ）履歴詳細キャッシュを無効化する。
+export const useInvalidateQuizAfterWordEdit = (wordSetId: string) => {
+	const queryClient = useQueryClient();
+	return (wordId: string) => {
+		queryClient.invalidateQueries({ queryKey: quizKeys.explain(wordSetId, wordId) });
+		queryClient.invalidateQueries({ queryKey: quizKeys.sessions(wordSetId) });
+	};
+};
+
 // 開始画面の履歴一覧（直近10件、サマリのみ）
 export const useQuizSessions = (wordSetId: string) =>
 	useQuery({

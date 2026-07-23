@@ -1,14 +1,18 @@
 import { AnimatePresence, motion, useAnimate } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { BsVolumeUp } from 'react-icons/bs'
+import { useSpeech } from '~/hooks/use-speech'
 import { haptic } from '~/lib/haptic'
-import type { QuizQuestion, QuizSessionItem, QuizTimeLimit } from '~/types'
+import type { QuizDirection, QuizQuestion, QuizSessionItem, QuizTimeLimit } from '~/types'
 
 interface QuizPlayingScreenProps {
     question: QuizQuestion
     currentIndex: number
     total: number
     timeLimitSeconds: QuizTimeLimit
+    // プロンプトの読み上げ言語切り替えに使う（wordToMeaning=英単語→en-US / meaningToWord=日本語の意味→ja-JP）
+    direction: QuizDirection
     // 表示用レコード(QuizSessionItem)をそのまま親に渡す。時間切れは selectedText: null。
     onAnswer: (item: QuizSessionItem) => void
     onQuit: () => void
@@ -21,6 +25,7 @@ export function QuizPlayingScreen({
     currentIndex,
     total,
     timeLimitSeconds,
+    direction,
     onAnswer,
     onQuit,
 }: QuizPlayingScreenProps) {
@@ -58,6 +63,7 @@ export function QuizPlayingScreen({
                     key={`${question.wordId}-${question.meaningId}`}
                     question={question}
                     timeLimitSeconds={timeLimitSeconds}
+                    direction={direction}
                     onAnswer={onAnswer}
                 />
             </AnimatePresence>
@@ -71,15 +77,20 @@ const TIMER_DANGER_RATIO = 0.3
 function QuizQuestionCard({
     question,
     timeLimitSeconds,
+    direction,
     onAnswer,
 }: {
     question: QuizQuestion
     timeLimitSeconds: QuizTimeLimit
+    direction: QuizDirection
     onAnswer: (item: QuizSessionItem) => void
 }) {
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
     const [locked, setLocked] = useState(false)
     const [scope, animate] = useAnimate<HTMLDivElement>()
+    // プロンプト読み上げ。unmount(次の問題への遷移)時はフック内部で必ずcancelされる
+    const { speak, isSpeaking, isSupported: isSpeechSupported } = useSpeech()
+    const speechLang = direction === 'wordToMeaning' ? 'en-US' : 'ja-JP'
 
     // タイムアウト判定はアニメーション(表示)に依存させず、マウント時に一度だけ張る
     // setTimeout（deadline方式）で行う。二重発火防止は ref で行い、state の再レンダリングを待たない。
@@ -169,7 +180,22 @@ function QuizQuestionCard({
             className="space-y-6"
         >
             {/* プロンプトカード: 長文の意味でも崩れないよう中央寄せ・可変高さ */}
-            <div className="rounded-3xl border border-black/5 bg-black/[0.02] backdrop-blur-xl px-6 py-10 flex items-center justify-center text-center min-h-[140px]">
+            <div className="relative rounded-3xl border border-black/5 bg-black/[0.02] backdrop-blur-xl px-6 py-10 flex items-center justify-center text-center min-h-[140px]">
+                {isSpeechSupported && (
+                    <button
+                        type="button"
+                        onClick={() => {
+                            haptic('light')
+                            speak(question.prompt, speechLang)
+                        }}
+                        aria-label="発音を再生"
+                        className={`absolute top-3 right-3 w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                            isSpeaking ? 'text-blue-500' : 'text-black/30'
+                        }`}
+                    >
+                        <BsVolumeUp className="h-5 w-5" />
+                    </button>
+                )}
                 <p className="text-[1.35rem] leading-snug font-medium text-black/85 break-words">
                     {question.prompt}
                 </p>

@@ -5,10 +5,16 @@ import { QuizExplainSheet } from './QuizExplainSheet'
 import { QuizSpinner } from './QuizSpinner'
 import type { QuizSessionItem } from '~/types'
 
-// フッターの出し分け。ライブ結果(その場でクイズを終えた直後)は次のアクション2つ、
-// 履歴結果(過去セッションの再表示)は「戻る」のみを出す。
+// フッターの出し分け。ライブ結果(その場でクイズを終えた直後)は
+// やり直す/次へ の2アクション + クイズをやめる、履歴結果(過去セッションの再表示)は「戻る」のみを出す。
 type QuizResultFooter =
-    | { mode: 'live'; isGeneratingNext: boolean; onNext: () => void; onRetrySame: () => void }
+    | {
+          mode: 'live'
+          isGeneratingNext: boolean
+          onNext: () => void
+          onRetrySame: () => void
+          onQuit: () => void
+      }
     | { mode: 'history'; onBack: () => void }
 
 interface QuizResultScreenProps {
@@ -80,27 +86,39 @@ export function QuizResultScreen({ wordSetId, items, footer }: QuizResultScreenP
 
             {/* フッターアクション */}
             {footer.mode === 'live' ? (
-                <section className="flex items-center gap-3 pt-2">
+                <section className="space-y-3 pt-2">
+                    <div className="flex items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                haptic('light')
+                                footer.onRetrySame()
+                            }}
+                            className="flex-1 h-12 rounded-full border border-black/10 text-black/70 text-[14px] font-medium active:scale-[0.98] transition-transform"
+                        >
+                            クイズをやり直す
+                        </button>
+                        <button
+                            type="button"
+                            disabled={footer.isGeneratingNext}
+                            onClick={() => {
+                                haptic('medium')
+                                footer.onNext()
+                            }}
+                            className="flex-1 h-12 rounded-full bg-black text-white text-[14px] font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-60"
+                        >
+                            {footer.isGeneratingNext ? <QuizSpinner /> : '次のクイズへ'}
+                        </button>
+                    </div>
                     <button
                         type="button"
                         onClick={() => {
                             haptic('light')
-                            footer.onRetrySame()
+                            footer.onQuit()
                         }}
-                        className="flex-1 h-12 rounded-full border border-black/10 text-black/70 text-[14px] font-medium active:scale-[0.98] transition-transform"
+                        className="w-full h-12 rounded-full text-black/45 text-[14px] font-medium active:scale-[0.98] transition-transform"
                     >
-                        同じ問題をやり直す
-                    </button>
-                    <button
-                        type="button"
-                        disabled={footer.isGeneratingNext}
-                        onClick={() => {
-                            haptic('medium')
-                            footer.onNext()
-                        }}
-                        className="flex-1 h-12 rounded-full bg-black text-white text-[14px] font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-60"
-                    >
-                        {footer.isGeneratingNext ? <QuizSpinner /> : '次の問題に進む'}
+                        クイズをやめる
                     </button>
                 </section>
             ) : (

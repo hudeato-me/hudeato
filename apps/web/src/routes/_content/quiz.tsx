@@ -203,6 +203,7 @@ function QuizPage() {
                             isGeneratingNext: isGenerating,
                             onNext: () => startQuiz(scope),
                             onRetrySame: retrySameQuiz,
+                            onQuit: handleQuit,
                         }}
                     />
                 </PhaseTransition>

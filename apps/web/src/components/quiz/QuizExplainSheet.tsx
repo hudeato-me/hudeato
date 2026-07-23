@@ -1,4 +1,3 @@
-import { BsPencil } from 'react-icons/bs'
 import { useQuizExplanation } from '~/hooks/use-quiz'
 import { haptic } from '~/lib/haptic'
 import type { QuizExplainMeaning } from '~/types'
@@ -64,10 +63,9 @@ export function QuizExplainSheet({ isOpen, onClose, wordSetId, wordId, onEdit }:
                                         haptic('light')
                                         if (wordId) onEdit(wordId)
                                     }}
-                                    aria-label="単語を編集"
-                                    className="shrink-0 -mr-2 -mt-1 w-11 h-11 rounded-full flex items-center justify-center text-black/35 active:bg-black/5 active:scale-90 transition-all"
+                                    className="shrink-0 h-9 px-4 rounded-full border border-black/10 text-black/60 text-[13px] font-medium active:scale-[0.96] active:bg-black/5 transition-all"
                                 >
-                                    <BsPencil className="h-[18px] w-[18px]" />
+                                    編集する
                                 </button>
                             </div>
 

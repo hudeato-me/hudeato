@@ -193,6 +193,42 @@ export const reviewLog = sqliteTable(
   ],
 );
 
+// クイズセッション履歴（結果画面の再表示・開始画面の履歴一覧用）。
+// review_log/review_state とは役割が別: あちらは学習記録、こちらは表示用スナップショット。
+// 単語が後で編集・削除されても結果画面の表示が崩れないよう、各問の表示用テキストを
+// デノーマライズして itemsJson(QuizSessionItem[]) にJSON文字列で保存する。
+export const quizSession = sqliteTable(
+  "quiz_session",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    wordSetId: text("word_set_id")
+      .notNull()
+      .references(() => wordSet.id, { onDelete: "cascade" }),
+    // 'all' | 'unanswered'
+    scope: text("scope", { enum: ["all", "unanswered"] }).notNull(),
+    // 'wordToMeaning' | 'meaningToWord'
+    direction: text("direction", {
+      enum: ["wordToMeaning", "meaningToWord"],
+    }).notNull(),
+    // 制限時間（秒）。Web開始画面で 10/20/30 から選ぶ。
+    timeLimitSeconds: integer("time_limit_seconds").notNull(),
+    correctCount: integer("correct_count").notNull(),
+    totalCount: integer("total_count").notNull(),
+    // QuizSessionItem[] のJSON文字列（表示用スナップショット）
+    itemsJson: text("items_json").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [
+    index("quiz_session_word_set_id_idx").on(table.wordSetId),
+    index("quiz_session_user_id_idx").on(table.userId),
+  ],
+);
+
 // 単語のベクトル埋め込み（クイズのディストラクタ近傍検索用）。word に対して 1:1。
 export const wordEmbedding = sqliteTable("word_embedding", {
   wordId: text("word_id")
@@ -212,6 +248,7 @@ export const wordEmbedding = sqliteTable("word_embedding", {
 export const userWordSetRelations = relations(user, ({ many }) => ({
   wordSets: many(wordSet),
   words: many(word),
+  quizSessions: many(quizSession),
 }));
 
 export const wordSetRelations = relations(wordSet, ({ one, many }) => ({
@@ -220,6 +257,7 @@ export const wordSetRelations = relations(wordSet, ({ one, many }) => ({
     references: [user.id],
   }),
   words: many(word),
+  quizSessions: many(quizSession),
 }));
 
 export const wordRelations = relations(word, ({ one, many }) => ({
@@ -273,5 +311,16 @@ export const wordEmbeddingRelations = relations(wordEmbedding, ({ one }) => ({
   word: one(word, {
     fields: [wordEmbedding.wordId],
     references: [word.id],
+  }),
+}));
+
+export const quizSessionRelations = relations(quizSession, ({ one }) => ({
+  user: one(user, {
+    fields: [quizSession.userId],
+    references: [user.id],
+  }),
+  wordSet: one(wordSet, {
+    fields: [quizSession.wordSetId],
+    references: [wordSet.id],
   }),
 }));

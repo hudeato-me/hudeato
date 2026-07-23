@@ -144,3 +144,134 @@ export const WordRecompleteRequestSchema = z.object({
 		.optional(),
 });
 export type WordRecompleteRequest = z.infer<typeof WordRecompleteRequestSchema>;
+
+// ---------------------------------------------------------------------------
+// クイズ(P2)の共有スキーマ
+// クイズは meaning 単位で出題する（review が meaning 単位のため）。
+// 正誤判定はクライアント側で行うため、レスポンスに correctIndex を含める。
+// ---------------------------------------------------------------------------
+
+// 出題方向。wordToMeaning=問題文が単語・選択肢が意味 / meaningToWord=問題文が意味・選択肢が単語
+export const QuizDirectionSchema = z.enum(["wordToMeaning", "meaningToWord"]);
+export type QuizDirection = z.infer<typeof QuizDirectionSchema>;
+
+// 出題範囲。all=セット内全ての意味 / unanswered=未習得(word_meaning.isRemembered=false)の意味のみ
+export const QuizScopeSchema = z.enum(["all", "unanswered"]);
+export type QuizScope = z.infer<typeof QuizScopeSchema>;
+
+// GET /quiz/:setId のクエリ（エンドポイント自体は P2-3）
+export const QuizQuerySchema = z.object({
+	scope: QuizScopeSchema.default("all"),
+	direction: QuizDirectionSchema.default("wordToMeaning"),
+	count: z.coerce.number().int().min(1).max(20).default(10),
+});
+export type QuizQuery = z.infer<typeof QuizQuerySchema>;
+
+// クイズの1問。正誤判定はクライアント側で行うため correctIndex を送出する。
+export const QuizQuestionSchema = z.object({
+	wordId: z.string(),
+	meaningId: z.string(),
+	prompt: z.string().min(1),
+	choices: z.array(z.string()).length(4),
+	correctIndex: z.number().int().min(0).max(3),
+});
+export type QuizQuestion = z.infer<typeof QuizQuestionSchema>;
+
+// GET /quiz/:setId のレスポンス
+export const QuizResponseSchema = z.object({
+	scope: QuizScopeSchema,
+	direction: QuizDirectionSchema,
+	questions: z.array(QuizQuestionSchema),
+});
+export type QuizResponse = z.infer<typeof QuizResponseSchema>;
+
+// POST /quiz/:setId/answer のリクエスト。正誤判定はクライアント側で行い、結果だけを記録する。
+export const QuizAnswerRequestSchema = z.object({
+	wordId: z.string().min(1),
+	meaningId: z.string().min(1),
+	correct: z.boolean(),
+});
+export type QuizAnswerRequest = z.infer<typeof QuizAnswerRequestSchema>;
+
+// レスポンス: review_state に加え、更新後の isRemembered / isMastered を返す（Web の表示更新用）。
+export const QuizAnswerResponseSchema = z.object({
+	success: z.boolean(),
+	reviewState: ReviewStateSchema,
+	isRemembered: z.boolean(),
+	isMastered: z.boolean(),
+});
+export type QuizAnswerResponse = z.infer<typeof QuizAnswerResponseSchema>;
+
+// GET /quiz/:setId/:wordId/explain のレスポンス（結果一覧からの解説表示用）。
+export const QuizExplainMeaningSchema = z.object({
+	id: z.string(),
+	slot: z.number().int(),
+	meaning: z.string(),
+	partOfSpeech: z.string().nullable(),
+	phonetic: z.string().nullable(),
+	example: z.string().nullable(),
+	collocation: z.string().nullable(),
+	synonym: z.string().nullable(),
+	etymology: z.string().nullable(),
+	source: z.string().nullable(),
+	isRemembered: z.boolean(),
+});
+export type QuizExplainMeaning = z.infer<typeof QuizExplainMeaningSchema>;
+
+export const QuizExplainResponseSchema = z.object({
+	wordId: z.string(),
+	text: z.string(),
+	locationLabel: z.string().nullable(),
+	imageKey: z.string().nullable(),
+	meanings: z.array(QuizExplainMeaningSchema),
+});
+export type QuizExplainResponse = z.infer<typeof QuizExplainResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// クイズセッション履歴(P2)の共有スキーマ
+// 結果画面のセッション(正解数・各問の回答内容)をサーバーに保存し、開始画面の履歴一覧・
+// 過去の結果画面の再表示に使う。review_log(学習記録)とは役割が別で、
+// こちらは表示用にテキストをデノーマライズしたスナップショットを保持する。
+// ---------------------------------------------------------------------------
+
+// クイズの制限時間（秒）。開始画面で 10/20/30 から選ぶ。
+export const QuizTimeLimitSchema = z.union([z.literal(10), z.literal(20), z.literal(30)]);
+export type QuizTimeLimit = z.infer<typeof QuizTimeLimitSchema>;
+
+// セッション内の1問分の表示用スナップショット。selectedText が null は時間切れ(未回答)。
+export const QuizSessionItemSchema = z.object({
+	wordId: z.string(),
+	meaningId: z.string(),
+	prompt: z.string(),
+	selectedText: z.string().nullable(),
+	correctText: z.string(),
+	correct: z.boolean(),
+});
+export type QuizSessionItem = z.infer<typeof QuizSessionItemSchema>;
+
+// POST /quiz/:setId/sessions のリクエスト。correctCount/totalCountはサーバー側でitemsから算出する。
+export const QuizSessionCreateRequestSchema = z.object({
+	scope: QuizScopeSchema,
+	direction: QuizDirectionSchema,
+	timeLimitSeconds: QuizTimeLimitSchema,
+	items: z.array(QuizSessionItemSchema).min(1).max(20),
+});
+export type QuizSessionCreateRequest = z.infer<typeof QuizSessionCreateRequestSchema>;
+
+// 履歴一覧の1件(itemsは含めない軽量サマリ)
+export const QuizSessionSummarySchema = z.object({
+	id: z.string(),
+	scope: QuizScopeSchema,
+	direction: QuizDirectionSchema,
+	timeLimitSeconds: z.number().int(),
+	correctCount: z.number().int().nonnegative(),
+	totalCount: z.number().int().positive(),
+	createdAt: z.number(), // epoch ms
+});
+export type QuizSessionSummary = z.infer<typeof QuizSessionSummarySchema>;
+
+// GET /quiz/:setId/sessions/:sessionId のレスポンス(過去の結果画面の再表示用)
+export const QuizSessionDetailSchema = QuizSessionSummarySchema.extend({
+	items: z.array(QuizSessionItemSchema),
+});
+export type QuizSessionDetail = z.infer<typeof QuizSessionDetailSchema>;

@@ -16,4 +16,7 @@ export type Bindings = {
 	MEANING_CACHE: KVNamespace;
 	// AI補完ジョブのキュー（producer）。consumer は index.ts の queue ハンドラ。
 	WORD_COMPLETION_QUEUE: Queue<WordCompletionMessage>;
+	// Google Cloud Text-to-Speech の APIキー。未設定時はTTSを503で無効化する
+	// （本番はsecretとして別途設定するためwrangler.tomlには書かない）。
+	GOOGLE_TTS_API_KEY?: string;
 };

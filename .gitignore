@@ -34,3 +34,4 @@ coverage
 !.claude/skills/
 
 bash.exe.stackdump
+.DS_Store

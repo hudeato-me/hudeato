@@ -62,12 +62,18 @@ export const findMeaningForWord = async (
 const isPositiveResult = (result: ReviewResult) =>
 	result === "correct" || result === "known";
 
-// レビュー結果を記録する最小版。
-// review_log への追記 + review_state の upsert + word.lastReviewedAt 更新を
-// 1トランザクションで行い、更新後の review_state を返す。
+// db.transaction のコールバックに渡される tx の型。
+// saveReviewInTx を他モジュール（quiz の回答記録）から同一トランザクション内で
+// 呼び出せるようにするため、外に切り出して名前を付けておく。
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+// レビュー結果を記録する最小版（トランザクション本体）。
+// review_log への追記 + review_state の upsert + word.lastReviewedAt 更新を行い、
+// 更新後の review_state を返す。呼び出し元が既にトランザクション内にいる場合
+// （例: quiz の回答記録で isRemembered/isMastered 更新と合成する場合）に使う。
 // 間隔反復の本アルゴリズムは P4 で実装する。
-export const saveReview = async (
-	db: Db,
+export const saveReviewInTx = async (
+	tx: Tx,
 	params: {
 		logId: string;
 		wordId: string;
@@ -78,46 +84,58 @@ export const saveReview = async (
 ) => {
 	const positive = isPositiveResult(params.result);
 
-	return db.transaction(async (tx) => {
-		await tx.insert(reviewLog).values({
-			id: params.logId,
-			wordId: params.wordId,
-			meaningId: params.meaningId,
-			mode: params.mode,
-			result: params.result,
-		});
-
-		// 正答→reps+1 / 誤答→lapses+1 & reps リセット の最小ロジック（meaning 単位）
-		await tx
-			.insert(reviewState)
-			.values({
-				meaningId: params.meaningId,
-				reps: positive ? 1 : 0,
-				lapses: positive ? 0 : 1,
-			})
-			.onConflictDoUpdate({
-				target: reviewState.meaningId,
-				set: {
-					reps: positive ? sql`${reviewState.reps} + 1` : 0,
-					lapses: positive
-						? sql`${reviewState.lapses}`
-						: sql`${reviewState.lapses} + 1`,
-					updatedAt: new Date(),
-				},
-			});
-
-		// 既存の word.lastReviewedAt も更新しておく
-		await tx
-			.update(word)
-			.set({ lastReviewedAt: new Date() })
-			.where(eq(word.id, params.wordId));
-
-		const state = await tx.query.reviewState.findFirst({
-			where: eq(reviewState.meaningId, params.meaningId),
-		});
-		// 直前に upsert しているため必ず存在する
-		return state!;
+	await tx.insert(reviewLog).values({
+		id: params.logId,
+		wordId: params.wordId,
+		meaningId: params.meaningId,
+		mode: params.mode,
+		result: params.result,
 	});
+
+	// 正答→reps+1 / 誤答→lapses+1 & reps リセット の最小ロジック（meaning 単位）
+	await tx
+		.insert(reviewState)
+		.values({
+			meaningId: params.meaningId,
+			reps: positive ? 1 : 0,
+			lapses: positive ? 0 : 1,
+		})
+		.onConflictDoUpdate({
+			target: reviewState.meaningId,
+			set: {
+				reps: positive ? sql`${reviewState.reps} + 1` : 0,
+				lapses: positive
+					? sql`${reviewState.lapses}`
+					: sql`${reviewState.lapses} + 1`,
+				updatedAt: new Date(),
+			},
+		});
+
+	// 既存の word.lastReviewedAt も更新しておく
+	await tx
+		.update(word)
+		.set({ lastReviewedAt: new Date() })
+		.where(eq(word.id, params.wordId));
+
+	const state = await tx.query.reviewState.findFirst({
+		where: eq(reviewState.meaningId, params.meaningId),
+	});
+	// 直前に upsert しているため必ず存在する
+	return state!;
+};
+
+// レビュー結果を記録する最小版。saveReviewInTx を1トランザクションで包むだけ。
+export const saveReview = async (
+	db: Db,
+	params: {
+		logId: string;
+		wordId: string;
+		meaningId: string;
+		mode: ReviewMode;
+		result: ReviewResult;
+	},
+) => {
+	return db.transaction((tx) => saveReviewInTx(tx, params));
 };
 
 // ---------------------------------------------------------------------------

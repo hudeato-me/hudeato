@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { createMiddleware } from "hono/factory";
 import { createDb } from "../db";
 import study from "../routes/study";
+import quiz from "../routes/quiz";
 import type { WordsRouteVariables } from "../types";
 import type { TestContext } from "./setup";
 
@@ -15,7 +16,7 @@ export function createTestDb(ctx: TestContext) {
 }
 
 /**
- * 学習系ルートを本番同様の認可ミドルウェア付きでマウントしたテストapp。
+ * 学習系ルート（study + quiz）を本番同様の認可ミドルウェア付きでマウントしたテストapp。
  * 本番 index.ts と同じく、セッション検証 → db / userId を注入する。
  */
 export function createStudyTestApp(ctx: TestContext) {
@@ -40,7 +41,8 @@ export function createStudyTestApp(ctx: TestContext) {
 
 	const api = new Hono<{ Variables: WordsRouteVariables }>()
 		.use("*", protectedMiddleware)
-		.route("/v1/study", study);
+		.route("/v1/study", study)
+		.route("/v1/quiz", quiz);
 
 	app.route("/api", api);
 	return app;

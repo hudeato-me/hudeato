@@ -1,4 +1,7 @@
+import { motion } from 'motion/react'
 import { FilterTabs } from '~/components/FilterTabs'
+import { useVoiceEnabled } from '~/hooks/use-tts'
+import { haptic } from '~/lib/haptic'
 import { QuizHistorySection } from './QuizHistorySection'
 import { QuizSpinner } from './QuizSpinner'
 import type { QuizDirection, QuizScope, QuizTimeLimit } from '~/types'
@@ -42,6 +45,9 @@ export function QuizConfigScreen({
     hasError,
     onSelectHistorySession,
 }: QuizConfigScreenProps) {
+    // 音声トグルは出題画面と同じグローバル状態を共有する（クイズ全体で1つの状態）
+    const { enabled: voiceEnabled, toggle: toggleVoice } = useVoiceEnabled()
+
     return (
         <div className="space-y-8">
             <section className="space-y-3">
@@ -92,6 +98,33 @@ export function QuizConfigScreen({
                     value={String(timeLimit)}
                     onChange={(value) => onTimeLimitChange(Number(value) as QuizTimeLimit)}
                 />
+            </section>
+
+            <section className="space-y-3">
+                <div className="text-sm text-black/50 px-1">音声</div>
+                <div className="w-full rounded-[14px] border border-black/5 bg-white px-4 py-3.5 flex items-center justify-between">
+                    <span className="text-[15px] text-black/80">発音を自動再生</span>
+                    <button
+                        type="button"
+                        role="switch"
+                        aria-checked={voiceEnabled}
+                        aria-label="発音を自動再生"
+                        onClick={() => {
+                            haptic('light')
+                            toggleVoice()
+                        }}
+                        className={`w-11 h-6 rounded-full p-0.5 flex items-center transition-colors ${
+                            voiceEnabled ? 'bg-black' : 'bg-black/15'
+                        }`}
+                    >
+                        <motion.span
+                            layout
+                            transition={{ type: 'spring', stiffness: 500, damping: 32 }}
+                            className="w-5 h-5 rounded-full bg-white shadow-sm"
+                            style={{ marginLeft: voiceEnabled ? 'auto' : 0 }}
+                        />
+                    </button>
+                </div>
             </section>
 
             {emptyState === 'unanswered' && (

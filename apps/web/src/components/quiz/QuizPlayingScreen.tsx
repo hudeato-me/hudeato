@@ -1,8 +1,8 @@
 import { AnimatePresence, motion, useAnimate } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { BsVolumeUp } from 'react-icons/bs'
-import { useSpeech } from '~/hooks/use-speech'
+import { BsVolumeMute, BsVolumeUp } from 'react-icons/bs'
+import { ttsLangForDirection, useTtsPlayer, useVoiceEnabled, type TtsLang } from '~/hooks/use-tts'
 import { haptic } from '~/lib/haptic'
 import type { QuizDirection, QuizQuestion, QuizSessionItem, QuizTimeLimit } from '~/types'
 
@@ -11,7 +11,7 @@ interface QuizPlayingScreenProps {
     currentIndex: number
     total: number
     timeLimitSeconds: QuizTimeLimit
-    // プロンプトの読み上げ言語切り替えに使う（wordToMeaning=英単語→en-US / meaningToWord=日本語の意味→ja-JP）
+    // プロンプトの読み上げ言語切り替えに使う（wordToMeaning=英単語→en / meaningToWord=日本語の意味→ja）
     direction: QuizDirection
     // 表示用レコード(QuizSessionItem)をそのまま親に渡す。時間切れは selectedText: null。
     onAnswer: (item: QuizSessionItem) => void
@@ -29,9 +29,14 @@ export function QuizPlayingScreen({
     onAnswer,
     onQuit,
 }: QuizPlayingScreenProps) {
+    // 音声トグルはクイズ全体で1つの状態（設定画面とも共有）。再生器はこのクイズセッション
+    // (playingフェーズ)を通して1つ持ち、Blob URLキャッシュをまたいで使い回す。
+    const { enabled: voiceEnabled, toggle: toggleVoice } = useVoiceEnabled()
+    const { play, stop } = useTtsPlayer()
+
     return (
         <div className="space-y-6">
-            {/* ヘッダー: やめる導線 + プログレス */}
+            {/* ヘッダー: やめる導線 + 音声トグル + プログレス */}
             <div className="space-y-3">
                 <div className="flex items-center justify-between">
                     <button
@@ -44,9 +49,26 @@ export function QuizPlayingScreen({
                     >
                         やめる
                     </button>
-                    <span className="text-[13px] text-black/40 tabular-nums">
-                        {currentIndex + 1} / {total}
-                    </span>
+                    <div className="flex items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                haptic('light')
+                                // OFFにした瞬間に再生中の音声を即停止する
+                                if (voiceEnabled) stop()
+                                toggleVoice()
+                            }}
+                            aria-label={voiceEnabled ? '音声をオフにする' : '音声をオンにする'}
+                            aria-pressed={voiceEnabled}
+                            className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${voiceEnabled ? 'bg-blue-500/10 text-blue-500' : 'bg-black/[0.05] text-black/30'
+                                }`}
+                        >
+                            {voiceEnabled ? <BsVolumeUp className="h-4 w-4" /> : <BsVolumeMute className="h-4 w-4" />}
+                        </button>
+                        <span className="text-[13px] text-black/40 tabular-nums">
+                            {currentIndex + 1} / {total}
+                        </span>
+                    </div>
                 </div>
                 <div className="h-1 w-full bg-black/[0.06] rounded-full overflow-hidden">
                     <motion.div
@@ -64,6 +86,9 @@ export function QuizPlayingScreen({
                     question={question}
                     timeLimitSeconds={timeLimitSeconds}
                     direction={direction}
+                    voiceEnabled={voiceEnabled}
+                    play={play}
+                    stop={stop}
                     onAnswer={onAnswer}
                 />
             </AnimatePresence>
@@ -78,19 +103,35 @@ function QuizQuestionCard({
     question,
     timeLimitSeconds,
     direction,
+    voiceEnabled,
+    play,
+    stop,
     onAnswer,
 }: {
     question: QuizQuestion
     timeLimitSeconds: QuizTimeLimit
     direction: QuizDirection
+    voiceEnabled: boolean
+    play: (text: string, lang: TtsLang) => void
+    stop: () => void
     onAnswer: (item: QuizSessionItem) => void
 }) {
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
     const [locked, setLocked] = useState(false)
     const [scope, animate] = useAnimate<HTMLDivElement>()
-    // プロンプト読み上げ。unmount(次の問題への遷移)時はフック内部で必ずcancelされる
-    const { speak, isSpeaking, isSupported: isSpeechSupported } = useSpeech()
-    const speechLang = direction === 'wordToMeaning' ? 'en-US' : 'ja-JP'
+    const ttsLang = ttsLangForDirection(direction)
+
+    // 音声トグルONなら問題表示と同時に自動再生する。回答後のフィードバック表示中は
+    // 止めず、次の問題への遷移・アンマウント時（「やめる」等）に必ず止める。
+    useEffect(() => {
+        if (!voiceEnabled) return
+        play(question.prompt, ttsLang)
+        return () => stop()
+        // question(=key)ごとにQuizQuestionCard自体がremountされるため、voiceEnabledの
+        // 変化にだけ反応させればよい（下のタイマーeffectと同じ理由でquestion/play/stopは
+        // 依存に含めない）
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [voiceEnabled])
 
     // タイムアウト判定はアニメーション(表示)に依存させず、マウント時に一度だけ張る
     // setTimeout（deadline方式）で行う。二重発火防止は ref で行い、state の再レンダリングを待たない。
@@ -179,23 +220,10 @@ function QuizQuestionCard({
             transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
             className="space-y-6"
         >
-            {/* プロンプトカード: 長文の意味でも崩れないよう中央寄せ・可変高さ */}
-            <div className="relative rounded-3xl border border-black/5 bg-black/[0.02] backdrop-blur-xl px-6 py-10 flex items-center justify-center text-center min-h-[140px]">
-                {isSpeechSupported && (
-                    <button
-                        type="button"
-                        onClick={() => {
-                            haptic('light')
-                            speak(question.prompt, speechLang)
-                        }}
-                        aria-label="発音を再生"
-                        className={`absolute top-3 right-3 w-11 h-11 rounded-full flex items-center justify-center transition-all active:scale-90 ${
-                            isSpeaking ? 'text-blue-500' : 'text-black/30'
-                        }`}
-                    >
-                        <BsVolumeUp className="h-5 w-5" />
-                    </button>
-                )}
+            {/* プロンプトカード: 長文の意味でも崩れないよう中央寄せ・可変高さ。
+                発音の自動再生・停止は上部ヘッダーの音声トグルで一括管理する（このカード単体には
+                再生ボタンを持たない） */}
+            <div className="rounded-3xl border border-black/5 bg-black/[0.02] backdrop-blur-xl px-6 py-10 flex items-center justify-center text-center min-h-[140px]">
                 <p className="text-[1.35rem] leading-snug font-medium text-black/85 break-words">
                     {question.prompt}
                 </p>

@@ -13,6 +13,7 @@ import wordSets from "./routes/word-sets";
 import upload from "./routes/upload";
 import study from "./routes/study";
 import quiz from "./routes/quiz";
+import tts from "./routes/tts";
 import { rateLimiter } from "./utils/rate-limiter";
 
 const app = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>();
@@ -89,6 +90,7 @@ const api = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 	.route("/v1/sets/:setId/words", words)
 	.route("/v1/study", study)
 	.route("/v1/quiz", quiz)
+	.route("/v1/tts", tts)
 	.route("/v1/upload", upload)
 	.route("/dashboard", dashboard);
 

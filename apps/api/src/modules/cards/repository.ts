@@ -2,6 +2,7 @@ import { and, asc, eq } from "drizzle-orm";
 import type { StudyScope } from "@hudeato/schema";
 import { word, wordMeaning } from "../../db";
 import { Db } from "../../types/words-route-type";
+import { recalcMasteredInTx, saveReviewInTx } from "../study/repository";
 
 // フラッシュカード(P3)のデッキ取得クエリを定義する。
 // カードは単語1枚で、裏面に配下の全ての意味を並べるため、単語と意味をまとめて取得する。
@@ -53,5 +54,53 @@ export const findCardDeckWords = async (
 				},
 			},
 		},
+	});
+};
+
+// ---------------------------------------------------------------------------
+// スワイプ記録。
+// ---------------------------------------------------------------------------
+
+// カードのスワイプ結果を1トランザクションで記録する。
+// カードは単語1枚・評価も単語単位なので、配下の全 meaning に同じ結果を適用する。
+// (a) 各 meaning に review_log 追記 + review_state 更新（study.saveReviewInTx を共有）
+// (b) 全 meaning の isRemembered を remembered で更新
+// (c) word.isMastered を再計算（study.recalcMasteredInTx を共有）
+// review_log は meaning 単位で残すため、単語の意味数だけ行が増える（P4 の入力として必要）。
+// 呼び出し元で対象 word の所有確認を済ませている前提。
+// 意味を1件も持たない単語（デッキに出ないはず）の場合は何も記録せず isRemembered=false を返す。
+export const saveCardSwipe = async (
+	db: Db,
+	params: { wordId: string; remembered: boolean },
+) => {
+	return db.transaction(async (tx) => {
+		const meanings = await tx
+			.select({ id: wordMeaning.id })
+			.from(wordMeaning)
+			.where(eq(wordMeaning.wordId, params.wordId))
+			.orderBy(asc(wordMeaning.slot));
+
+		if (meanings.length === 0) {
+			return { isRemembered: false, isMastered: false };
+		}
+
+		for (const meaning of meanings) {
+			await saveReviewInTx(tx, {
+				logId: crypto.randomUUID(),
+				wordId: params.wordId,
+				meaningId: meaning.id,
+				mode: "flashcard",
+				result: params.remembered ? "known" : "unknown",
+			});
+		}
+
+		await tx
+			.update(wordMeaning)
+			.set({ isRemembered: params.remembered })
+			.where(eq(wordMeaning.wordId, params.wordId));
+
+		const isMastered = await recalcMasteredInTx(tx, params.wordId);
+
+		return { isRemembered: params.remembered, isMastered };
 	});
 };

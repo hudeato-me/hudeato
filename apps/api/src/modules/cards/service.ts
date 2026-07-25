@@ -1,6 +1,11 @@
-import type { Card, CardsResponse, StudyScope } from "@hudeato/schema";
+import type {
+	Card,
+	CardsResponse,
+	CardSwipeRequest,
+	StudyScope,
+} from "@hudeato/schema";
 import { Db } from "../../types/words-route-type";
-import { findCardDeckWords } from "./repository";
+import { findCardDeckWords, saveCardSwipe } from "./repository";
 
 // フラッシュカード(P3)のビジネスロジック層。
 
@@ -39,4 +44,17 @@ export const generateCardDeck = async (
 	}
 
 	return { scope, cards };
+};
+
+// カードのスワイプ結果（右=知っている / 左=まだ知らない）を記録し、
+// 更新後の isRemembered / isMastered を返す（Web の楽観更新の確定用）。
+// 呼び出し側で対象 word の所有確認を済ませている前提（quiz.recordQuizAnswer と同様）。
+export const recordCardSwipe = async (
+	db: Db,
+	params: CardSwipeRequest,
+): Promise<{ isRemembered: boolean; isMastered: boolean }> => {
+	return saveCardSwipe(db, {
+		wordId: params.wordId,
+		remembered: params.remembered,
+	});
 };

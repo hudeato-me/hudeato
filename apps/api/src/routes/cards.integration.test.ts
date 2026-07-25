@@ -128,3 +128,85 @@ describe("GET /api/v1/cards/:setId", () => {
 		expect(body.cards).toEqual([]);
 	});
 });
+
+describe("POST /api/v1/cards/:setId/swipe", () => {
+	it("未認証は401", async () => {
+		const res = await requestJson(
+			app,
+			"POST",
+			`/api/v1/cards/${setId}/swipe`,
+			"",
+			{ wordId, remembered: true },
+		);
+		expect(res.status).toBe(401);
+	});
+
+	it("不正なbody(remembered欠落)は400", async () => {
+		const res = await requestJson(
+			app,
+			"POST",
+			`/api/v1/cards/${setId}/swipe`,
+			cookie,
+			{ wordId },
+		);
+		expect(res.status).toBe(400);
+	});
+
+	it("存在しない単語は404", async () => {
+		const res = await requestJson(
+			app,
+			"POST",
+			`/api/v1/cards/${setId}/swipe`,
+			cookie,
+			{ wordId: "cards-route-word-missing", remembered: true },
+		);
+		expect(res.status).toBe(404);
+	});
+
+	it("他セットの単語を指定すると404", async () => {
+		const res = await requestJson(
+			app,
+			"POST",
+			`/api/v1/cards/${otherSetId}/swipe`,
+			cookie,
+			{ wordId, remembered: true },
+		);
+		expect(res.status).toBe(404);
+	});
+
+	it("正常系: 右スワイプで習得済みになり201が返る", async () => {
+		const res = await requestJson(
+			app,
+			"POST",
+			`/api/v1/cards/${setId}/swipe`,
+			cookie,
+			{ wordId, remembered: true },
+		);
+
+		expect(res.status).toBe(201);
+		const body: Json = await res.json();
+		expect(body).toEqual({
+			success: true,
+			isRemembered: true,
+			isMastered: true,
+		});
+
+		const updated = await db.query.word.findFirst({
+			where: eq(word.id, wordId),
+		});
+		expect(updated!.isMastered).toBe(true);
+	});
+
+	it("記録後は scope=unmastered のデッキから外れる", async () => {
+		const res = await requestJson(
+			app,
+			"GET",
+			`/api/v1/cards/${setId}?scope=unmastered`,
+			cookie,
+		);
+
+		expect(res.status).toBe(200);
+		const body: Json = await res.json();
+		expect(body.cards).toEqual([]);
+	});
+});

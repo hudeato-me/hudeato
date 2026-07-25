@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { QuizDirection, QuizScope } from "@hudeato/schema";
 import { quizSession, word, wordEmbedding, wordMeaning, wordSet } from "../../db";

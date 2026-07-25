@@ -1,10 +1,15 @@
 import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { BsX } from 'react-icons/bs'
+import { useCardGesture, type CardGestureAction } from '~/hooks/cards/useCardGesture'
 import { useTtsPlayer, useVoiceEnabled } from '~/hooks/use-tts'
 import { haptic } from '~/lib/haptic'
 import type { Card } from '~/types'
 import { FlashCard } from './FlashCard'
+
+// 送り出し（確定後に画面外へ抜ける）時間と、次カードの入場時間。
+const EXIT_DURATION_MS = 260
+const ENTER_DURATION = 0.3
 
 interface CardDeckScreenProps {
     cards: Card[]
@@ -16,6 +21,7 @@ interface CardDeckScreenProps {
 }
 
 // カード学習画面。表=言葉、タップで裏返して意味を見る。
+// 右へスワイプ=覚えた / 左へスワイプ=もう一度 / 上へスワイプ=編集。
 // 次のカードを1枚だけ奥に重ねて見せ、送り出しに奥行きを与える。
 export function CardDeckScreen({
     cards,
@@ -24,7 +30,6 @@ export function CardDeckScreen({
     onEdit,
     onQuit,
 }: CardDeckScreenProps) {
-    const [flipped, setFlipped] = useState(false)
     const { enabled: voiceEnabled } = useVoiceEnabled()
     const { play, stop } = useTtsPlayer()
 
@@ -33,9 +38,7 @@ export function CardDeckScreen({
     if (!card) return null
 
     const handleEvaluate = (remembered: boolean) => {
-        haptic('medium')
         stop()
-        setFlipped(false)
         onEvaluate(remembered)
     }
 
@@ -79,17 +82,13 @@ export function CardDeckScreen({
                         <div className="h-full w-full rounded-[26px] border border-black/[0.06] bg-white shadow-[0_1px_10px_rgba(0,0,0,0.03)]" />
                     </div>
                 )}
-                <CardSurface
+                <SwipeableCard
                     key={card.wordId}
                     card={card}
-                    flipped={flipped}
                     isFirstCard={currentIndex === 0}
                     voiceEnabled={voiceEnabled}
                     play={play}
-                    onFlip={() => {
-                        haptic('light')
-                        setFlipped((value) => !value)
-                    }}
+                    onEvaluate={handleEvaluate}
                     onEdit={() => onEdit(card.wordId)}
                 />
             </div>
@@ -98,14 +97,20 @@ export function CardDeckScreen({
             <div className="flex items-center gap-3 pb-2">
                 <button
                     type="button"
-                    onClick={() => handleEvaluate(false)}
+                    onClick={() => {
+                        haptic('medium')
+                        handleEvaluate(false)
+                    }}
                     className="flex-1 h-13 rounded-full border border-black/10 bg-white text-[15px] text-black/70 active:scale-[0.98] transition-transform"
                 >
                     ↺ もう一度
                 </button>
                 <button
                     type="button"
-                    onClick={() => handleEvaluate(true)}
+                    onClick={() => {
+                        haptic('medium')
+                        handleEvaluate(true)
+                    }}
                     className="flex-1 h-13 rounded-full bg-black text-white text-[15px] font-medium active:scale-[0.98] transition-transform"
                 >
                     ✓ 覚えた
@@ -115,48 +120,134 @@ export function CardDeckScreen({
     )
 }
 
-// 1枚のカード。表示時の自動再生と、タップでの反転を担う。
-// card ごとに key を付け替えて remount することで、自動再生を毎カード1回だけ走らせる。
-function CardSurface({
+// 1枚のカード。ジェスチャ（左右=評価 / 上=編集 / タップ=反転）と表示時の自動再生を担う。
+// card ごとに key を付け替えて remount するため、反転状態も自動再生も自然にリセットされる。
+function SwipeableCard({
     card,
-    flipped,
     isFirstCard,
     voiceEnabled,
     play,
-    onFlip,
+    onEvaluate,
     onEdit,
 }: {
     card: Card
-    flipped: boolean
     isFirstCard: boolean
     voiceEnabled: boolean
     play: (text: string, lang: 'en' | 'ja') => Promise<void>
-    onFlip: () => void
+    onEvaluate: (remembered: boolean) => void
     onEdit: () => void
 }) {
-    // 表示と同時に表面の単語を読み上げる（トグルONのとき。クイズと同じ挙動）
+    const [flipped, setFlipped] = useState(false)
+    // 入場アニメーションが済んだか（ドラッグ追従の transition と混ざらないよう分ける）
+    const [entered, setEntered] = useState(false)
+
+    const gesture = useCardGesture({
+        exitDurationMs: EXIT_DURATION_MS,
+        onCommit: (action) => haptic(action === 'edit' ? 'light' : 'medium'),
+        onAction: (action: CardGestureAction) => {
+            if (action === 'edit') {
+                onEdit()
+                return
+            }
+            onEvaluate(action === 'known')
+        },
+        onTap: () => {
+            haptic('light')
+            setFlipped((value) => !value)
+        },
+    })
+
+    // 入場アニメーション完了後にドラッグ追従へ切り替える
+    useEffect(() => {
+        const timer = setTimeout(() => setEntered(true), ENTER_DURATION * 1000)
+        return () => clearTimeout(timer)
+    }, [])
+
+    // 確定後の退出タイマーはアンマウント時に必ず破棄する
+    useEffect(() => {
+        return () => gesture.dispose()
+        // dispose は ref だけを触るため、マウント時の1回でよい
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
     useAutoPlay(card.text, voiceEnabled, play)
 
+    const { offset, rotate, exiting } = gesture
+    // 確定したらドラッグ方向へ画面外まで抜ける（回転はドラッグ時の向きを維持しつつ少し増やす）
+    const exitX = exiting === 'known' ? 520 : exiting === 'again' ? -520 : 0
+
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-            onClick={onFlip}
-            className="absolute inset-0 cursor-pointer"
-        >
-            <FlashCard
-                card={card}
-                flipped={flipped}
-                play={play}
-                onEdit={onEdit}
-                showHint={isFirstCard}
-            />
-        </motion.div>
+        <>
+            {/* 評価ラベル: カードの背後・静かな位置に出す（斜めのスタンプにはしない） */}
+            <div className="pointer-events-none absolute inset-x-0 top-5 z-10 flex items-center justify-between px-5">
+                <span
+                    className="text-[13px] font-medium tracking-wide text-black/60"
+                    style={{ opacity: gesture.againOpacity }}
+                >
+                    ↺ もう一度
+                </span>
+                <span
+                    className="text-[13px] font-medium tracking-wide text-black/80"
+                    style={{ opacity: gesture.knownOpacity }}
+                >
+                    ✓ 覚えた
+                </span>
+            </div>
+            <div
+                className="pointer-events-none absolute inset-x-0 top-5 z-10 flex justify-center"
+                style={{ opacity: gesture.editOpacity }}
+            >
+                <span className="text-[13px] font-medium tracking-wide text-black/70">✎ 編集</span>
+            </div>
+
+            <motion.div
+                {...gesture.handlers}
+                initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                animate={
+                    exiting
+                        ? {
+                              opacity: 0,
+                              x: exitX,
+                              y: offset.y,
+                              rotate: rotate * 1.25,
+                              scale: 1,
+                          }
+                        : {
+                              opacity: 1,
+                              x: offset.x,
+                              y: offset.y,
+                              rotate,
+                              scale: 1,
+                          }
+                }
+                transition={
+                    !entered
+                        ? // 入場: 少し下・奥から静かに立ち上がる
+                          { duration: ENTER_DURATION, ease: [0.4, 0, 0.2, 1] }
+                        : exiting
+                          ? { duration: EXIT_DURATION_MS / 1000, ease: [0.4, 0, 1, 1] }
+                          : offset.x === 0 && offset.y === 0
+                            ? // 指を離して戻るとき: 重みのあるカードが所定位置に収まる感触（跳ね返りは小さく）
+                              { type: 'spring', stiffness: 320, damping: 34 }
+                            : // ドラッグ追従中は補間を挟まず指に張り付かせる
+                              { duration: 0, ease: 'linear' }
+                }
+                style={{ touchAction: 'none' }}
+                className="absolute inset-0 cursor-pointer"
+            >
+                <FlashCard
+                    card={card}
+                    flipped={flipped}
+                    play={play}
+                    onEdit={onEdit}
+                    showHint={isFirstCard}
+                />
+            </motion.div>
+        </>
     )
 }
 
-// 表示時に1回だけ自動再生する。カードごとに CardSurface が remount されるため、
+// 表示時に1回だけ自動再生する。カードごとに SwipeableCard が remount されるため、
 // マウント時の1回だけでよい（学習中にトグルを切り替えても、いま見ているカードは再生し直さない）。
 function useAutoPlay(
     text: string,

@@ -14,6 +14,22 @@ export const cardKeys = {
 		["cards", "deck", wordSetId, scope] as const,
 };
 
+// デッキ取得の実処理。useQuery と、編集後の再取得（命令的な取得）で共有する。
+const fetchCardDeck = async (
+	wordSetId: string,
+	scope: CardScope,
+): Promise<CardsResponse> => {
+	const res = await client.api.v1.cards[":setId"].$get({
+		param: { setId: wordSetId },
+		query: { scope, limit: DECK_LIMIT },
+	});
+	if (!res.ok) {
+		const err = (await res.json()) as { error?: string };
+		throw new Error(err.error ?? `API Error: ${res.status}`);
+	}
+	return res.json();
+};
+
 // カードデッキの取得。開始画面で範囲を選んでから取りに行くため、
 // 明示的に enabled を渡して制御する（scope ごとにキャッシュを分ける）。
 export const useCardDeck = (
@@ -23,20 +39,25 @@ export const useCardDeck = (
 ) =>
 	useQuery({
 		queryKey: cardKeys.deck(wordSetId, scope),
-		queryFn: async () => {
-			const res = await client.api.v1.cards[":setId"].$get({
-				param: { setId: wordSetId },
-				query: { scope, limit: DECK_LIMIT },
-			});
-			if (!res.ok) {
-				const err = (await res.json()) as { error?: string };
-				throw new Error(err.error ?? `API Error: ${res.status}`);
-			}
-			return res.json();
-		},
+		queryFn: () => fetchCardDeck(wordSetId, scope),
 		enabled: enabled && !!wordSetId,
 		staleTime: CACHE_STALE_TIME,
 	});
+
+// 編集後に1枚分の最新内容を取り直すためのフック。
+// 学習中のデッキは画面側の state に固定しているため、編集した単語だけを差し替える。
+// 対象がデッキから消えていた場合（削除など）は null を返す。
+export const useRefetchCard = (wordSetId: string, scope: CardScope) => {
+	const queryClient = useQueryClient();
+	return async (wordId: string) => {
+		const fresh = await queryClient.fetchQuery({
+			queryKey: cardKeys.deck(wordSetId, scope),
+			queryFn: () => fetchCardDeck(wordSetId, scope),
+			staleTime: 0,
+		});
+		return fresh.cards.find((card) => card.wordId === wordId) ?? null;
+	};
+};
 
 // スワイプ結果の記録。カードは指を離した瞬間に次へ進むため、記録はバックグラウンドで送る。
 // デッキキャッシュ（表示中の isMastered/isRemembered）を楽観更新し、失敗したら元に戻す。

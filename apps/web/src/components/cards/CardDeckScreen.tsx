@@ -18,6 +18,8 @@ interface CardDeckScreenProps {
     onEvaluate: (remembered: boolean) => void
     onEdit: (wordId: string) => void
     onQuit: () => void
+    // 編集ドロワー表示中など、カード操作を受け付けたくない間は true
+    disabled?: boolean
 }
 
 // カード学習画面。表=言葉、タップで裏返して意味を見る。
@@ -29,6 +31,7 @@ export function CardDeckScreen({
     onEvaluate,
     onEdit,
     onQuit,
+    disabled = false,
 }: CardDeckScreenProps) {
     const { enabled: voiceEnabled } = useVoiceEnabled()
     const { play, stop } = useTtsPlayer()
@@ -90,6 +93,7 @@ export function CardDeckScreen({
                     play={play}
                     onEvaluate={handleEvaluate}
                     onEdit={() => onEdit(card.wordId)}
+                    disabled={disabled}
                 />
             </div>
 
@@ -97,6 +101,7 @@ export function CardDeckScreen({
             <div className="flex items-center gap-3 pb-2">
                 <button
                     type="button"
+                    disabled={disabled}
                     onClick={() => {
                         haptic('medium')
                         handleEvaluate(false)
@@ -107,6 +112,7 @@ export function CardDeckScreen({
                 </button>
                 <button
                     type="button"
+                    disabled={disabled}
                     onClick={() => {
                         haptic('medium')
                         handleEvaluate(true)
@@ -129,6 +135,7 @@ function SwipeableCard({
     play,
     onEvaluate,
     onEdit,
+    disabled,
 }: {
     card: Card
     isFirstCard: boolean
@@ -136,6 +143,7 @@ function SwipeableCard({
     play: (text: string, lang: 'en' | 'ja') => Promise<void>
     onEvaluate: (remembered: boolean) => void
     onEdit: () => void
+    disabled: boolean
 }) {
     const [flipped, setFlipped] = useState(false)
     // 入場アニメーションが済んだか（ドラッグ追従の transition と混ざらないよう分ける）
@@ -201,7 +209,7 @@ function SwipeableCard({
             </div>
 
             <motion.div
-                {...gesture.handlers}
+                {...(disabled ? {} : gesture.handlers)}
                 initial={{ opacity: 0, y: 16, scale: 0.98 }}
                 animate={
                     exiting

@@ -5,7 +5,12 @@ import { CardConfigScreen } from '~/components/cards/CardConfigScreen'
 import { CardDeckScreen } from '~/components/cards/CardDeckScreen'
 import { CardResultScreen } from '~/components/cards/CardResultScreen'
 import { WordEntryDrawer } from '~/components/WordEntryDrawer'
-import { useCardDeck, useInvalidateAfterCards, useSwipeCard } from '~/hooks/use-cards'
+import {
+    useCardDeck,
+    useInvalidateAfterCards,
+    useRefetchCard,
+    useSwipeCard,
+} from '~/hooks/use-cards'
 import { useContentContext } from '~/lib/content-context'
 import { haptic } from '~/lib/haptic'
 import type { Card, CardScope } from '~/types'
@@ -45,6 +50,7 @@ function CardsPage() {
         isError,
     } = useCardDeck(selectedWordSetId ?? '', scope, isDeckRequested && !!selectedWordSetId)
     const { mutate: swipeCard } = useSwipeCard(selectedWordSetId ?? '', scope)
+    const refetchCard = useRefetchCard(selectedWordSetId ?? '', scope)
 
     // playingフェーズの間だけHeader/Footerを退場させる（没入モード）。
     // フェーズが変わった瞬間・アンマウント時には必ずOFFに戻す（クリーンアップ漏れ厳禁）。
@@ -121,6 +127,26 @@ function CardsPage() {
         startSession(againCards)
     }
 
+    // 編集ドロワーを閉じたとき。編集した単語だけを取り直して手元のデッキに差し替え、
+    // 同じカードに留まったまま内容を最新にする（評価はまだ付けていないので進めない）。
+    const handleCloseEdit = async () => {
+        const wordId = editingWordId
+        setEditingWordId(null)
+        if (!wordId || !selectedWordSetId) return
+
+        invalidateAfterCards(selectedWordSetId)
+        try {
+            const fresh = await refetchCard(wordId)
+            if (!fresh) return
+            setDeck((cards) =>
+                cards.map((card) => (card.wordId === wordId ? fresh : card)),
+            )
+        } catch (error) {
+            // 取り直しに失敗しても学習は止めない（表示が編集前のまま残るだけ）
+            console.error('カードの再取得に失敗しました:', error)
+        }
+    }
+
     if (!selectedWordSetId) {
         return (
             <div className="pt-24 text-center">
@@ -156,6 +182,8 @@ function CardsPage() {
                             onEvaluate={handleEvaluate}
                             onEdit={setEditingWordId}
                             onQuit={handleQuit}
+                            // 編集ドロワーを開いている間はカードのジェスチャを止める
+                            disabled={editingWordId !== null}
                         />
                     </PhaseTransition>
                 )}
@@ -178,11 +206,7 @@ function CardsPage() {
 
             <WordEntryDrawer
                 isOpen={editingWordId !== null}
-                onClose={() => {
-                    setEditingWordId(null)
-                    // 編集内容をカードに反映するためデッキを取り直す（同じカードに留まる）
-                    if (selectedWordSetId) invalidateAfterCards(selectedWordSetId)
-                }}
+                onClose={handleCloseEdit}
                 wordSetId={selectedWordSetId}
                 existingWordId={editingWordId}
             />

@@ -16,6 +16,7 @@ import { Route as ContentStudyRouteImport } from './routes/_content/study'
 import { Route as ContentQuizRouteImport } from './routes/_content/quiz'
 import { Route as ContentListRouteImport } from './routes/_content/list'
 import { Route as ContentDashboardRouteImport } from './routes/_content/dashboard'
+import { Route as ContentCardsRouteImport } from './routes/_content/cards'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -51,10 +52,16 @@ const ContentDashboardRoute = ContentDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => ContentRoute,
 } as any)
+const ContentCardsRoute = ContentCardsRouteImport.update({
+  id: '/cards',
+  path: '/cards',
+  getParentRoute: () => ContentRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/cards': typeof ContentCardsRoute
   '/dashboard': typeof ContentDashboardRoute
   '/list': typeof ContentListRoute
   '/quiz': typeof ContentQuizRoute
@@ -63,6 +70,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/cards': typeof ContentCardsRoute
   '/dashboard': typeof ContentDashboardRoute
   '/list': typeof ContentListRoute
   '/quiz': typeof ContentQuizRoute
@@ -73,6 +81,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_content': typeof ContentRouteWithChildren
   '/login': typeof LoginRoute
+  '/_content/cards': typeof ContentCardsRoute
   '/_content/dashboard': typeof ContentDashboardRoute
   '/_content/list': typeof ContentListRoute
   '/_content/quiz': typeof ContentQuizRoute
@@ -80,14 +89,22 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/dashboard' | '/list' | '/quiz' | '/study'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/cards'
+    | '/dashboard'
+    | '/list'
+    | '/quiz'
+    | '/study'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/dashboard' | '/list' | '/quiz' | '/study'
+  to: '/' | '/login' | '/cards' | '/dashboard' | '/list' | '/quiz' | '/study'
   id:
     | '__root__'
     | '/'
     | '/_content'
     | '/login'
+    | '/_content/cards'
     | '/_content/dashboard'
     | '/_content/list'
     | '/_content/quiz'
@@ -151,10 +168,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContentDashboardRouteImport
       parentRoute: typeof ContentRoute
     }
+    '/_content/cards': {
+      id: '/_content/cards'
+      path: '/cards'
+      fullPath: '/cards'
+      preLoaderRoute: typeof ContentCardsRouteImport
+      parentRoute: typeof ContentRoute
+    }
   }
 }
 
 interface ContentRouteChildren {
+  ContentCardsRoute: typeof ContentCardsRoute
   ContentDashboardRoute: typeof ContentDashboardRoute
   ContentListRoute: typeof ContentListRoute
   ContentQuizRoute: typeof ContentQuizRoute
@@ -162,6 +187,7 @@ interface ContentRouteChildren {
 }
 
 const ContentRouteChildren: ContentRouteChildren = {
+  ContentCardsRoute: ContentCardsRoute,
   ContentDashboardRoute: ContentDashboardRoute,
   ContentListRoute: ContentListRoute,
   ContentQuizRoute: ContentQuizRoute,

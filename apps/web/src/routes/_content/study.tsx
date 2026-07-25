@@ -38,19 +38,20 @@ function StudyPage() {
                     </div>
                 </Link>
 
-                {/* 単語帳: P3で実装予定。押せない見た目 + 準備中バッジ */}
-                <div className="relative w-full bg-black/[0.02] border border-black/5 rounded-[14px] p-5 flex items-center gap-4 text-left">
-                    <div className="w-12 h-12 shrink-0 rounded-full bg-black/5 flex items-center justify-center text-black/25">
+                {/* 単語帳: タップで /cards へ */}
+                <Link
+                    to="/cards"
+                    onClick={() => haptic('medium')}
+                    className="w-full bg-white border border-black/5 rounded-[14px] p-5 flex items-center gap-4 text-left shadow-[0_1px_3px_rgba(0,0,0,0.02)] active:scale-[0.98] transition-transform"
+                >
+                    <div className="w-12 h-12 shrink-0 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600">
                         <BsBook className="h-6 w-6" />
                     </div>
                     <div className="min-w-0">
-                        <div className="text-[1rem] font-medium text-black/40">単語帳</div>
-                        <p className="text-[13px] text-black/30 mt-0.5 leading-snug">スワイプでテンポよく振り返る</p>
+                        <div className="text-[1rem] font-medium text-black/85">単語帳</div>
+                        <p className="text-[13px] text-black/40 mt-0.5 leading-snug">スワイプでテンポよく振り返る</p>
                     </div>
-                    <span className="absolute top-3 right-3 text-[11px] font-medium text-black/35 bg-black/5 px-2.5 py-1 rounded-full">
-                        準備中
-                    </span>
-                </div>
+                </Link>
             </section>
         </div>
     )

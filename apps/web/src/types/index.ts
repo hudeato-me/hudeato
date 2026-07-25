@@ -51,3 +51,13 @@ export interface FieldSetting {
     order: number;
 }
 
+// フラッシュカード (GET /api/v1/cards/:setId)
+export type CardsQuery = InferRequestType<typeof client.api.v1.cards[":setId"]["$get"]>["query"]
+export type CardsResponse = InferResponseType<typeof client.api.v1.cards[":setId"]["$get"], 200>
+export type Card = CardsResponse["cards"][number]
+export type CardMeaning = Card["meanings"][number]
+export type CardScope = CardsResponse["scope"]
+
+// スワイプ記録 (POST /api/v1/cards/:setId/swipe)
+export type CardSwipeReq = InferRequestType<typeof client.api.v1.cards[":setId"]["swipe"]["$post"]>["json"]
+export type CardSwipeRes = InferResponseType<typeof client.api.v1.cards[":setId"]["swipe"]["$post"], 201>

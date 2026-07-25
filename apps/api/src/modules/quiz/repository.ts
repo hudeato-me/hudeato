@@ -3,7 +3,7 @@ import { alias } from "drizzle-orm/sqlite-core";
 import type { QuizDirection, QuizScope } from "@hudeato/schema";
 import { quizSession, word, wordEmbedding, wordMeaning, wordSet } from "../../db";
 import { Db } from "../../types/words-route-type";
-import { saveReviewInTx } from "../study/repository";
+import { recalcMasteredInTx, saveReviewInTx } from "../study/repository";
 
 // クイズ生成が使う出題候補(単語×意味)のSQLクエリを定義する。
 
@@ -131,23 +131,7 @@ export const saveQuizAnswer = async (
 			.set({ isRemembered: params.correct })
 			.where(eq(wordMeaning.id, params.meaningId));
 
-		// 全行取得ではなく件数集計で isMastered を再計算する
-		const [{ total, unrememberedCount }] = await tx
-			.select({
-				total: count(),
-				unrememberedCount: count(
-					sql`CASE WHEN ${wordMeaning.isRemembered} = false THEN 1 END`,
-				),
-			})
-			.from(wordMeaning)
-			.where(eq(wordMeaning.wordId, params.wordId));
-
-		const isMastered = total > 0 && unrememberedCount === 0;
-
-		await tx
-			.update(word)
-			.set({ isMastered })
-			.where(eq(word.id, params.wordId));
+		const isMastered = await recalcMasteredInTx(tx, params.wordId);
 
 		return { reviewState, isRemembered: params.correct, isMastered };
 	});

@@ -1,4 +1,4 @@
-import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, count, eq, ne, sql } from "drizzle-orm";
 import type { ReviewMode, ReviewResult, StudyScope } from "@hudeato/schema";
 import { reviewLog, reviewState, word, wordEmbedding, wordMeaning } from "../../db";
 import { Db } from "../../types/words-route-type";
@@ -122,6 +122,29 @@ export const saveReviewInTx = async (
 	});
 	// 直前に upsert しているため必ず存在する
 	return state!;
+};
+
+// 単語の isMastered を配下 meaning の isRemembered から再計算し、word に反映する。
+// ルールは「meaning が1件以上あり、全て isRemembered=true」→ true、それ以外 → false
+// （word-schema.ts のコメントに書かれた既存の導出ルール）。
+// クイズの回答記録・カードのスワイプ記録が共有するため study 側に置く。
+// 全行取得ではなく件数集計で判定する。呼び出し元のトランザクション内で使う。
+export const recalcMasteredInTx = async (tx: Tx, wordId: string) => {
+	const [{ total, unrememberedCount }] = await tx
+		.select({
+			total: count(),
+			unrememberedCount: count(
+				sql`CASE WHEN ${wordMeaning.isRemembered} = false THEN 1 END`,
+			),
+		})
+		.from(wordMeaning)
+		.where(eq(wordMeaning.wordId, wordId));
+
+	const isMastered = total > 0 && unrememberedCount === 0;
+
+	await tx.update(word).set({ isMastered }).where(eq(word.id, wordId));
+
+	return isMastered;
 };
 
 // レビュー結果を記録する最小版。saveReviewInTx を1トランザクションで包むだけ。

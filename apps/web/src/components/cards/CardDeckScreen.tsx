@@ -173,10 +173,16 @@ function SwipeableCard({
     const [flipped, setFlipped] = useState(false)
     const { enabled: audioEnabled, toggle: toggleAudio } = useCardAudioEnabled()
 
-    // OFFにした瞬間に再生中の音声を止める（クイズの出題画面と同じ挙動）
+    // OFFにした瞬間は再生中の音声を止め、ONにした瞬間は今見ている面をすぐ読み上げる
+    // （ONにしたのに次のカードまで何も鳴らない、という空振りを避ける）
     const handleToggleAudio = () => {
         haptic('light')
-        if (audioEnabled) stop()
+        if (audioEnabled) {
+            stop()
+        } else {
+            const face = flipped ? 'back' : 'front'
+            void play(speechTextOf(card, direction, face), ttsLangForCardFace(direction, face))
+        }
         toggleAudio()
     }
 

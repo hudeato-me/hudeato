@@ -18,10 +18,9 @@ interface FlashCardProps {
     onFlip: () => void
     // ドラッグ中は本文を隠し、方向ラベル（オーバーレイ）に置き換える
     contentOpacity: MotionValue<number>
-    frontAudioEnabled: boolean
-    backAudioEnabled: boolean
-    onToggleFrontAudio: () => void
-    onToggleBackAudio: () => void
+    // 音声のON/OFFは表裏共通の1つの状態
+    audioEnabled: boolean
+    onToggleAudio: () => void
 }
 
 // 表に出すテキスト。出題方向で単語と意味が入れ替わる。
@@ -51,10 +50,8 @@ export function FlashCard({
     flipped,
     onFlip,
     contentOpacity,
-    frontAudioEnabled,
-    backAudioEnabled,
-    onToggleFrontAudio,
-    onToggleBackAudio,
+    audioEnabled,
+    onToggleAudio,
 }: FlashCardProps) {
     // 品詞は先頭の意味から拾う（無ければ行ごと省略する）
     const partOfSpeech = card.meanings[0]?.partOfSpeech?.trim() || null
@@ -75,11 +72,7 @@ export function FlashCard({
                 aria-hidden={flipped}
                 className="absolute inset-0 rounded-3xl bg-white border border-black/10 shadow-2xl shadow-black/10 p-6 md:p-8 flex flex-col items-center justify-center overflow-hidden"
             >
-                <AudioToggle
-                    enabled={frontAudioEnabled}
-                    onToggle={onToggleFrontAudio}
-                    tone="light"
-                />
+                <AudioToggle enabled={audioEnabled} onToggle={onToggleAudio} tone="light" />
                 <motion.div
                     style={{ opacity: contentOpacity }}
                     className="flex flex-col items-center justify-center gap-3 w-full min-h-0"
@@ -111,11 +104,7 @@ export function FlashCard({
                 aria-hidden={!flipped}
                 className="absolute inset-0 rounded-3xl bg-black text-white shadow-2xl shadow-black/10 p-6 md:p-8 flex flex-col items-center justify-center overflow-hidden"
             >
-                <AudioToggle
-                    enabled={backAudioEnabled}
-                    onToggle={onToggleBackAudio}
-                    tone="dark"
-                />
+                <AudioToggle enabled={audioEnabled} onToggle={onToggleAudio} tone="dark" />
                 <motion.div
                     style={{ opacity: contentOpacity }}
                     className="flex flex-col items-center justify-center gap-3 w-full min-h-0"

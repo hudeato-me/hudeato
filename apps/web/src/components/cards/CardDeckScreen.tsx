@@ -171,8 +171,14 @@ function SwipeableCard({
     onEdit: () => void
 }) {
     const [flipped, setFlipped] = useState(false)
-    const { enabled: frontAudio, toggle: toggleFrontAudio } = useCardAudioEnabled('front')
-    const { enabled: backAudio, toggle: toggleBackAudio } = useCardAudioEnabled('back')
+    const { enabled: audioEnabled, toggle: toggleAudio } = useCardAudioEnabled()
+
+    // OFFにした瞬間に再生中の音声を止める（クイズの出題画面と同じ挙動）
+    const handleToggleAudio = () => {
+        haptic('light')
+        if (audioEnabled) stop()
+        toggleAudio()
+    }
 
     const x = useMotionValue(0)
     const y = useMotionValue(0)
@@ -195,7 +201,7 @@ function SwipeableCard({
 
     // 表面: カードが変わったら少し遅らせて自動再生する
     useEffect(() => {
-        if (!frontAudio) return
+        if (!audioEnabled) return
         const timer = setTimeout(() => {
             void play(speechTextOf(card, direction, 'front'), ttsLangForCardFace(direction, 'front'))
         }, FRONT_AUDIO_DELAY_MS)
@@ -206,7 +212,7 @@ function SwipeableCard({
 
     // 裏面: 反転した瞬間に再生する（遅延なし）
     useEffect(() => {
-        if (!flipped || !backAudio) return
+        if (!flipped || !audioEnabled) return
         void play(speechTextOf(card, direction, 'back'), ttsLangForCardFace(direction, 'back'))
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [flipped])
@@ -257,10 +263,8 @@ function SwipeableCard({
                     setFlipped((value) => !value)
                 }}
                 contentOpacity={contentOpacity}
-                frontAudioEnabled={frontAudio}
-                backAudioEnabled={backAudio}
-                onToggleFrontAudio={toggleFrontAudio}
-                onToggleBackAudio={toggleBackAudio}
+                audioEnabled={audioEnabled}
+                onToggleAudio={handleToggleAudio}
             />
 
             {/* ドラッグ中の方向ラベル。本文と入れ替わりで見える */}

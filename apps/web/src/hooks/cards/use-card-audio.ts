@@ -4,34 +4,28 @@ import type { CardDirection } from '~/types'
 
 // ---------------------------------------------------------------------------
 // 単語帳の音声設定。
-// 表面・裏面で別々のON/OFFを持ち、localStorage に永続化する。
+// 表裏で共通の1つのON/OFFを持ち、localStorage に永続化する。
+// 開始画面のスイッチとカード上の音量ボタンのどちらから変更しても同期する
+// （クイズの useVoiceEnabled と同じ流儀。状態はクイズとは独立させる）。
 // 読み上げ自体はクイズと同じ Google Cloud TTS（useTtsPlayer）を使う。
 // ---------------------------------------------------------------------------
 
-const STORAGE_KEYS = {
-    front: 'flashcard-front-audio',
-    back: 'flashcard-back-audio',
-} as const
+const STORAGE_KEY = 'flashcard-audio'
 
-export type CardFace = keyof typeof STORAGE_KEYS
+export type CardFace = 'front' | 'back'
 
-const readStored = (face: CardFace): boolean => {
+const readStored = (): boolean => {
     if (typeof window === 'undefined') return true
     try {
-        const raw = window.localStorage.getItem(STORAGE_KEYS[face])
-        // 未設定時は自動再生ONを既定にする
+        const raw = window.localStorage.getItem(STORAGE_KEY)
+        // 未設定時は自動再生ONを既定にする（まず機能の価値を体験してもらう）
         return raw === null ? true : raw === 'true'
     } catch {
         return true
     }
 }
 
-// 複数コンポーネント（表・裏のボタン）から同じ状態を参照・更新できるよう、
-// モジュールスコープのストア + useSyncExternalStore で同期する（use-tts.ts と同じ流儀）。
-const state: Record<CardFace, boolean> = {
-    front: readStored('front'),
-    back: readStored('back'),
-}
+let audioEnabled = readStored()
 const listeners = new Set<() => void>()
 
 const subscribe = (listener: () => void) => {
@@ -39,24 +33,26 @@ const subscribe = (listener: () => void) => {
     return () => listeners.delete(listener)
 }
 
-const setEnabled = (face: CardFace, next: boolean) => {
-    state[face] = next
+const getSnapshot = () => audioEnabled
+
+const setAudioEnabled = (next: boolean) => {
+    audioEnabled = next
     try {
-        window.localStorage.setItem(STORAGE_KEYS[face], String(next))
+        window.localStorage.setItem(STORAGE_KEY, String(next))
     } catch {
         // localStorage不可（プライベートモード等）でもメモリ内で状態は維持する
     }
     for (const listener of listeners) listener()
 }
 
-export function useCardAudioEnabled(face: CardFace) {
+export function useCardAudioEnabled() {
     const enabled = useSyncExternalStore(
         subscribe,
-        () => state[face],
+        getSnapshot,
         // SSR時は既定ON（クライアントで localStorage の値に落ち着く）
         () => true,
     )
-    const toggle = useCallback(() => setEnabled(face, !state[face]), [face])
+    const toggle = useCallback(() => setAudioEnabled(!audioEnabled), [])
     return { enabled, toggle }
 }
 

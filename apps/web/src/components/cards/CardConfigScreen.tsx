@@ -1,5 +1,8 @@
+import { motion } from 'motion/react'
 import { FilterTabs } from '~/components/FilterTabs'
 import { QuizSpinner } from '~/components/quiz/QuizSpinner'
+import { useCardAudioEnabled } from '~/hooks/cards/use-card-audio'
+import { haptic } from '~/lib/haptic'
 import type { CardScope } from '~/types'
 
 interface CardConfigScreenProps {
@@ -23,6 +26,9 @@ export function CardConfigScreen({
     onSwitchToAll,
     hasError,
 }: CardConfigScreenProps) {
+    // カード上の音量ボタンと同じ状態（表裏共通）
+    const { enabled: audioEnabled, toggle: toggleAudio } = useCardAudioEnabled()
+
     return (
         <div className="space-y-8">
             <section className="space-y-3">
@@ -35,6 +41,33 @@ export function CardConfigScreen({
                     value={scope}
                     onChange={onScopeChange}
                 />
+            </section>
+
+            <section className="space-y-3">
+                <div className="text-sm text-black/50 px-1">音声</div>
+                <div className="w-full rounded-[14px] border border-black/5 bg-white px-4 py-3.5 flex items-center justify-between">
+                    <span className="text-[15px] text-black/80">発音を自動再生</span>
+                    <button
+                        type="button"
+                        role="switch"
+                        aria-checked={audioEnabled}
+                        aria-label="発音を自動再生"
+                        onClick={() => {
+                            haptic('light')
+                            toggleAudio()
+                        }}
+                        className={`w-11 h-6 rounded-full p-0.5 flex items-center transition-colors ${
+                            audioEnabled ? 'bg-black' : 'bg-black/15'
+                        }`}
+                    >
+                        <motion.span
+                            layout
+                            transition={{ type: 'spring', stiffness: 500, damping: 32 }}
+                            className="w-5 h-5 rounded-full bg-white shadow-sm"
+                            style={{ marginLeft: audioEnabled ? 'auto' : 0 }}
+                        />
+                    </button>
+                </div>
             </section>
 
             {emptyState === 'unmastered' && (

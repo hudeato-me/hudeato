@@ -12,6 +12,9 @@ export interface BetterAuthConfigType {
 
 	upstashRedisRestUrl: string;
 	upstashRedisRestToken: string;
+
+	// 追加で信頼するオリジン（カンマ区切り）。実機確認用に .dev.vars で渡す。
+	devAllowedOrigins?: string;
 }
 
 export const betterAuthConfig = (
@@ -21,6 +24,7 @@ export const betterAuthConfig = (
 		betterAuthBaseUrl,
 		upstashRedisRestUrl,
 		upstashRedisRestToken,
+		devAllowedOrigins,
 	}: BetterAuthConfigType
 ) => {
 	const db = createDb(tursoDatabaseUrl, tursoAuthToken);
@@ -43,6 +47,13 @@ export const betterAuthConfig = (
 			// localhost / 127.0.0.1 / RFC1918 private IPs を任意ポートで許可（開発用）
 			const devOriginPattern = /^http:\/\/(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}):\d+$/
 			if (devOriginPattern.test(origin)) return [origin]
+			// それ以外は .dev.vars の DEV_ALLOWED_ORIGINS（カンマ区切り）で明示的に許可する。
+			// 実機確認用のホストをコードに直書きしないため。
+			const allowed = (devAllowedOrigins ?? "")
+				.split(",")
+				.map((entry) => entry.trim())
+				.filter(Boolean)
+			if (allowed.includes(origin)) return [origin]
 			return []
 		},
 	})

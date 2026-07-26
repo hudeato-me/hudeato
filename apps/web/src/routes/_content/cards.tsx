@@ -13,7 +13,7 @@ import {
 } from '~/hooks/use-cards'
 import { useContentContext } from '~/lib/content-context'
 import { haptic } from '~/lib/haptic'
-import type { Card, CardScope } from '~/types'
+import type { Card, CardDirection, CardScope } from '~/types'
 
 export const Route = createFileRoute('/_content/cards')({
     ssr: false,
@@ -29,6 +29,8 @@ function CardsPage() {
 
     const [phase, setPhase] = useState<CardPhase>('config')
     const [scope, setScope] = useState<CardScope>('all')
+    // 出題方向は表示上の切り替え（カード画面のヘッダーで変更する）
+    const [direction, setDirection] = useState<CardDirection>('wordToMeaning')
     // 「始める」を押してからデッキを取りに行く（開始画面を開いただけでは取得しない）
     const [isDeckRequested, setIsDeckRequested] = useState(false)
 
@@ -36,9 +38,9 @@ function CardsPage() {
     // 無効化で手元のカードが入れ替わらないようにする。
     const [deck, setDeck] = useState<Card[]>([])
     const [currentIndex, setCurrentIndex] = useState(0)
-    // 「もう一度」と評価したカード（結果画面からの復習に使う）
-    const [againCards, setAgainCards] = useState<Card[]>([])
-    const [rememberedCount, setRememberedCount] = useState(0)
+    // 評価済みの単語ID。同じ単語を重複してカウントしない（Setで持つ）。
+    const [masteredWords, setMasteredWords] = useState<Set<string>>(new Set())
+    const [unstudiedWords, setUnstudiedWords] = useState<Set<string>>(new Set())
     const [emptyState, setEmptyState] = useState<CardScope | null>(null)
 
     // 裏面から開く編集ドロワー
@@ -77,8 +79,8 @@ function CardsPage() {
     const startSession = (cards: Card[]) => {
         setDeck(cards)
         setCurrentIndex(0)
-        setAgainCards([])
-        setRememberedCount(0)
+        setMasteredWords(new Set())
+        setUnstudiedWords(new Set())
         setPhase('playing')
     }
 
@@ -99,10 +101,11 @@ function CardsPage() {
 
         swipeCard({ wordId: card.wordId, remembered })
 
+        const updater = (previous: Set<string>) => new Set(previous).add(card.wordId)
         if (remembered) {
-            setRememberedCount((count) => count + 1)
+            setMasteredWords(updater)
         } else {
-            setAgainCards((cards) => [...cards, card])
+            setUnstudiedWords(updater)
         }
 
         if (currentIndex + 1 < deck.length) {
@@ -119,12 +122,6 @@ function CardsPage() {
         haptic('light')
         if (selectedWordSetId) invalidateAfterCards(selectedWordSetId)
         setPhase('config')
-    }
-
-    // 結果画面から「もう一度」のカードだけを再学習する（APIは呼ばず手元のカードを使う）
-    const handleReviewAgain = () => {
-        haptic('medium')
-        startSession(againCards)
     }
 
     // 編集ドロワーを閉じたとき。編集した単語だけを取り直して手元のデッキに差し替え、
@@ -179,9 +176,14 @@ function CardsPage() {
                         <CardDeckScreen
                             cards={deck}
                             currentIndex={currentIndex}
+                            direction={direction}
+                            onDirectionChange={setDirection}
                             onEvaluate={handleEvaluate}
                             onEdit={setEditingWordId}
                             onQuit={handleQuit}
+                            masteredCount={masteredWords.size}
+                            unstudiedCount={unstudiedWords.size}
+                            completedCount={currentIndex}
                             // 編集ドロワーを開いている間はカードのジェスチャを止める
                             disabled={editingWordId !== null}
                         />
@@ -190,14 +192,9 @@ function CardsPage() {
                 {phase === 'result' && (
                     <PhaseTransition key="result">
                         <CardResultScreen
-                            rememberedCount={rememberedCount}
                             totalCount={deck.length}
+                            masteredCount={masteredWords.size}
                             onRestart={() => requestDeck(scope)}
-                            onReviewAgain={againCards.length > 0 ? handleReviewAgain : null}
-                            onQuit={() => {
-                                haptic('light')
-                                setPhase('config')
-                            }}
                             isLoading={isFetching}
                         />
                     </PhaseTransition>

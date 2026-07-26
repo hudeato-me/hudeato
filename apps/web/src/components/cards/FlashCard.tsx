@@ -1,154 +1,176 @@
-import { motion } from 'motion/react'
-import type { TtsLang } from '~/hooks/use-tts'
-import { getImageUrl } from '~/hooks/use-image-upload'
-import type { Card } from '~/types'
-import { SpeakButton } from './SpeakButton'
+import { motion, type MotionValue } from 'motion/react'
+import { BsVolumeUp, BsVolumeMute } from 'react-icons/bs'
+import type { Card, CardDirection } from '~/types'
 
-// 反転アニメーション。派手なバネ挙動を避け、滑らかに減速する慣性のあるカーブにする。
-export const FLIP_DURATION = 0.47
-export const FLIP_EASE = [0.22, 0.61, 0.36, 1] as const
+// 反転アニメーション。タップ後に自動で180度回転する（ドラッグ追従はしない）。
+// 直線的すぎない、少し慣性のあるSpring。大きくバウンドはさせない。
+const FLIP_TRANSITION = {
+    duration: 0.6,
+    type: 'spring',
+    stiffness: 260,
+    damping: 20,
+} as const
 
 interface FlashCardProps {
     card: Card
+    direction: CardDirection
     flipped: boolean
-    play: (text: string, lang: TtsLang) => Promise<void>
-    // 裏面から編集画面を開く（P3-5）。未指定なら編集ボタンを出さない。
-    onEdit?: () => void
-    // 初回だけスワイプヒントを濃く出す
-    showHint: boolean
+    onFlip: () => void
+    // ドラッグ中は本文を隠し、方向ラベル（オーバーレイ）に置き換える
+    contentOpacity: MotionValue<number>
+    frontAudioEnabled: boolean
+    backAudioEnabled: boolean
+    onToggleFrontAudio: () => void
+    onToggleBackAudio: () => void
 }
 
+// 表に出すテキスト。出題方向で単語と意味が入れ替わる。
+// 意味が複数ある場合は全て並べる（登録済みの語義をカードで取りこぼさないため）。
+export const frontTextsOf = (card: Card, direction: CardDirection): string[] =>
+    direction === 'wordToMeaning'
+        ? [card.text]
+        : card.meanings.map((meaning) => meaning.meaning)
+
+export const backTextsOf = (card: Card, direction: CardDirection): string[] =>
+    direction === 'wordToMeaning'
+        ? card.meanings.map((meaning) => meaning.meaning)
+        : [card.text]
+
+// 読み上げ対象。複数意味のときは先頭の意味だけを読む（全部読むと長すぎるため）。
+export const speechTextOf = (
+    card: Card,
+    direction: CardDirection,
+    face: 'front' | 'back',
+) => (face === 'front' ? frontTextsOf : backTextsOf)(card, direction)[0] ?? ''
+
 // カード1枚（表=言葉 / 裏=意味）。3D回転で反転し、表裏は同じ中心軸を共有する。
-// 反転の状態は親（デッキ）が持ち、このコンポーネントは見た目だけを担う。
-export function FlashCard({ card, flipped, play, onEdit, showHint }: FlashCardProps) {
-    // 表面の補助情報は最初の意味（slot昇順の先頭）から拾う。無ければ行ごと省略する。
-    const primary = card.meanings[0]
-    const phonetic = primary?.phonetic?.trim() || null
-    const partOfSpeech = primary?.partOfSpeech?.trim() || null
+// 反転状態は親（デッキ）が持ち、このコンポーネントは見た目だけを担う。
+export function FlashCard({
+    card,
+    direction,
+    flipped,
+    onFlip,
+    contentOpacity,
+    frontAudioEnabled,
+    backAudioEnabled,
+    onToggleFrontAudio,
+    onToggleBackAudio,
+}: FlashCardProps) {
+    // 品詞は先頭の意味から拾う（無ければ行ごと省略する）
+    const partOfSpeech = card.meanings[0]?.partOfSpeech?.trim() || null
+    const frontTexts = frontTextsOf(card, direction)
+    const backTexts = backTextsOf(card, direction)
 
     return (
-        <div className="h-full w-full [perspective:1400px]">
-            <motion.div
-                animate={{ rotateY: flipped ? 180 : 0 }}
-                transition={{ duration: FLIP_DURATION, ease: FLIP_EASE }}
-                className="relative h-full w-full [transform-style:preserve-3d]"
+        <motion.div
+            onClick={onFlip}
+            animate={{ rotateY: flipped ? 180 : 0 }}
+            transition={FLIP_TRANSITION}
+            style={{ transformStyle: 'preserve-3d' }}
+            className="relative h-full w-full cursor-pointer"
+        >
+            {/* 表: 白 */}
+            <div
+                style={{ backfaceVisibility: 'hidden' }}
+                aria-hidden={flipped}
+                className="absolute inset-0 rounded-3xl bg-white border border-black/10 shadow-2xl shadow-black/10 p-6 md:p-8 flex flex-col items-center justify-center overflow-hidden"
             >
-                {/* 表: 言葉 */}
-                <div
-                    className="absolute inset-0 rounded-[26px] border border-black/[0.06] bg-white shadow-[0_2px_20px_rgba(0,0,0,0.05)] px-6 py-8 flex flex-col items-center justify-center [backface-visibility:hidden]"
-                    aria-hidden={flipped}
+                <AudioToggle
+                    enabled={frontAudioEnabled}
+                    onToggle={onToggleFrontAudio}
+                    tone="light"
+                />
+                <motion.div
+                    style={{ opacity: contentOpacity }}
+                    className="flex flex-col items-center justify-center gap-3 w-full min-h-0"
                 >
-                    <div className="flex-1 flex flex-col items-center justify-center gap-4 min-h-0 w-full">
-                        <p className="font-serif text-[2.1rem] leading-[1.25] font-medium text-black/90 text-center break-words max-w-full">
-                            {card.text}
-                        </p>
-                        {(phonetic || partOfSpeech) && (
-                            <p className="text-[13px] text-black/35 text-center">
-                                {[phonetic, partOfSpeech].filter(Boolean).join('  ·  ')}
-                            </p>
-                        )}
-                        <SpeakButton text={card.text} lang="en" play={play} />
-                    </div>
-                    <p
-                        className={`text-[12px] text-center transition-opacity ${
-                            showHint ? 'text-black/35' : 'text-black/20'
-                        }`}
-                    >
-                        タップして意味を見る
-                    </p>
-                </div>
-
-                {/* 裏: 意味（複数ある場合は並列に並べる） */}
-                <div
-                    className="absolute inset-0 rounded-[26px] border border-black/[0.06] bg-white shadow-[0_2px_20px_rgba(0,0,0,0.05)] flex flex-col [backface-visibility:hidden] [transform:rotateY(180deg)]"
-                    aria-hidden={!flipped}
-                >
-                    {/* 上部: 単語（表より小さく。意味を主役にする） */}
-                    <div className="px-6 pt-6 pb-4 flex items-center gap-3 border-b border-black/[0.05]">
-                        <div className="min-w-0 flex-1">
-                            <p className="font-serif text-[1.2rem] font-medium text-black/85 break-words">
-                                {card.text}
-                            </p>
-                            {(phonetic || partOfSpeech) && (
-                                <p className="text-[12px] text-black/35 mt-0.5">
-                                    {[phonetic, partOfSpeech].filter(Boolean).join('  ·  ')}
-                                </p>
-                            )}
-                        </div>
-                        <SpeakButton text={card.text} lang="en" play={play} size="sm" />
-                    </div>
-
-                    {/* 中央: 意味・例文。情報が多い場合はカード内でスクロールさせる */}
-                    <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-5">
-                        {card.meanings.map((meaning, index) => (
-                            <div key={meaning.id} className="space-y-2">
-                                <div className="flex items-baseline gap-2">
-                                    {card.meanings.length > 1 && (
-                                        <span className="text-[11px] text-black/25 tabular-nums shrink-0 mt-1">
-                                            {index + 1}
-                                        </span>
-                                    )}
-                                    <p
-                                        className={`leading-snug text-black/85 break-words ${
-                                            index === 0 ? 'text-[1.3rem] font-medium' : 'text-[1.05rem]'
-                                        }`}
-                                    >
-                                        {meaning.meaning}
-                                    </p>
-                                </div>
-                                {meaning.example?.trim() && (
-                                    <div className="flex items-start gap-2 pl-0.5">
-                                        <p className="text-[13px] leading-relaxed text-black/45 break-words flex-1">
-                                            {meaning.example}
-                                        </p>
-                                        <SpeakButton
-                                            text={meaning.example}
-                                            lang="ja"
-                                            play={play}
-                                            size="sm"
-                                            label="例文を読み上げる"
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-
-                        {/* 補助情報: 覚えた場所・写真（あるときだけ） */}
-                        {(card.locationLabel || card.imageKey) && (
-                            <div className="pt-1 space-y-2">
-                                {card.imageKey && (
-                                    <img
-                                        src={getImageUrl(card.imageKey)}
-                                        alt=""
-                                        loading="lazy"
-                                        className="w-full max-h-36 object-cover rounded-[14px] border border-black/5"
-                                    />
-                                )}
-                                {card.locationLabel && (
-                                    <p className="text-[12px] text-black/35">{card.locationLabel}</p>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* 下部: 編集導線 */}
-                    {onEdit && (
-                        <div className="px-6 pb-5 pt-1">
-                            <button
-                                type="button"
-                                onPointerDown={(event) => event.stopPropagation()}
-                                onClick={(event) => {
-                                    event.stopPropagation()
-                                    onEdit()
-                                }}
-                                className="text-[13px] font-medium text-blue-500 active:opacity-60 transition-opacity"
-                            >
-                                編集する
-                            </button>
-                        </div>
+                    {partOfSpeech && (
+                        <p className="text-xs md:text-sm text-black/40">{partOfSpeech}</p>
                     )}
-                </div>
-            </motion.div>
-        </div>
+                    <div className="w-full max-w-full space-y-2 overflow-y-auto">
+                        {frontTexts.map((text, index) => (
+                            <p
+                                key={index}
+                                className={`text-center break-words max-w-full px-2 text-black ${
+                                    index === 0
+                                        ? 'text-2xl md:text-3xl lg:text-4xl'
+                                        : 'text-xl md:text-2xl text-black/75'
+                                }`}
+                            >
+                                {text}
+                            </p>
+                        ))}
+                    </div>
+                    <p className="text-xs md:text-sm text-black/30">タップして裏返す</p>
+                </motion.div>
+            </div>
+
+            {/* 裏: 黒 */}
+            <div
+                style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+                aria-hidden={!flipped}
+                className="absolute inset-0 rounded-3xl bg-black text-white shadow-2xl shadow-black/10 p-6 md:p-8 flex flex-col items-center justify-center overflow-hidden"
+            >
+                <AudioToggle
+                    enabled={backAudioEnabled}
+                    onToggle={onToggleBackAudio}
+                    tone="dark"
+                />
+                <motion.div
+                    style={{ opacity: contentOpacity }}
+                    className="flex flex-col items-center justify-center gap-3 w-full min-h-0"
+                >
+                    {partOfSpeech && (
+                        <p className="text-xs md:text-sm text-white/60">{partOfSpeech}</p>
+                    )}
+                    <div className="w-full max-w-full space-y-3 overflow-y-auto">
+                        {backTexts.map((text, index) => (
+                            <p
+                                key={index}
+                                className={`text-center break-words max-w-full px-2 ${
+                                    index === 0
+                                        ? 'text-2xl md:text-3xl'
+                                        : 'text-xl md:text-2xl text-white/75'
+                                }`}
+                            >
+                                {text}
+                            </p>
+                        ))}
+                    </div>
+                    <p className="text-xs md:text-sm text-white/50">タップして裏返す</p>
+                </motion.div>
+            </div>
+        </motion.div>
+    )
+}
+
+// 音量ボタン。自動再生のON/OFFだけを担い、押してもカードの反転・ドラッグへ伝播させない。
+function AudioToggle({
+    enabled,
+    onToggle,
+    tone,
+}: {
+    enabled: boolean
+    onToggle: () => void
+    tone: 'light' | 'dark'
+}) {
+    return (
+        <button
+            type="button"
+            aria-label={enabled ? '音声をオフにする' : '音声をオンにする'}
+            aria-pressed={enabled}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+                event.stopPropagation()
+                onToggle()
+            }}
+            className={`absolute top-4 right-4 h-10 w-10 rounded-full backdrop-blur-sm flex items-center justify-center transition-colors active:scale-90 ${
+                tone === 'light'
+                    ? 'bg-black/[0.04] text-black/60'
+                    : 'bg-white/15 text-white/80'
+            }`}
+        >
+            {enabled ? <BsVolumeUp className="h-5 w-5" /> : <BsVolumeMute className="h-5 w-5" />}
+        </button>
     )
 }

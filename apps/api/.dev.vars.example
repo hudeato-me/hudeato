@@ -6,3 +6,5 @@ UPSTASH_REDIS_REST_URL="http://127.0.0.1:6379"
 UPSTASH_REDIS_REST_TOKEN="eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0="
 GEMINI_API_KEY="your-gemini-api-key"
 GOOGLE_TTS_API_KEY="your-google-tts-api-key"
+# 実機確認用に追加で許可するオリジン（カンマ区切り。例: Tailscale IP）
+DEV_ALLOWED_ORIGINS=""

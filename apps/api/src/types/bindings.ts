@@ -19,4 +19,8 @@ export type Bindings = {
 	// Google Cloud Text-to-Speech の APIキー。未設定時はTTSを503で無効化する
 	// （本番はsecretとして別途設定するためwrangler.tomlには書かない）。
 	GOOGLE_TTS_API_KEY?: string;
+	// 追加で許可するオリジン（カンマ区切り）。実機確認用に Tailscale や
+	// 特定ホストからアクセスする場合に .dev.vars で指定する。
+	// 値をリポジトリに載せないため、コードにホストを直書きしない。
+	DEV_ALLOWED_ORIGINS?: string;
 };

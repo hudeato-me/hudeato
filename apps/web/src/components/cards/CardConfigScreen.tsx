@@ -1,8 +1,5 @@
-import { motion } from 'motion/react'
 import { FilterTabs } from '~/components/FilterTabs'
 import { QuizSpinner } from '~/components/quiz/QuizSpinner'
-import { useVoiceEnabled } from '~/hooks/use-tts'
-import { haptic } from '~/lib/haptic'
 import type { CardScope } from '~/types'
 
 interface CardConfigScreenProps {
@@ -26,9 +23,6 @@ export function CardConfigScreen({
     onSwitchToAll,
     hasError,
 }: CardConfigScreenProps) {
-    // 音声トグルはクイズと共有（学習機能全体で1つの状態）
-    const { enabled: voiceEnabled, toggle: toggleVoice } = useVoiceEnabled()
-
     return (
         <div className="space-y-8">
             <section className="space-y-3">
@@ -41,41 +35,6 @@ export function CardConfigScreen({
                     value={scope}
                     onChange={onScopeChange}
                 />
-            </section>
-
-            <section className="space-y-3">
-                <div className="text-sm text-black/50 px-1">音声</div>
-                <div className="w-full rounded-[14px] border border-black/5 bg-white px-4 py-3.5 flex items-center justify-between">
-                    <span className="text-[15px] text-black/80">発音を自動再生</span>
-                    <button
-                        type="button"
-                        role="switch"
-                        aria-checked={voiceEnabled}
-                        aria-label="発音を自動再生"
-                        onClick={() => {
-                            haptic('light')
-                            toggleVoice()
-                        }}
-                        className={`w-11 h-6 rounded-full p-0.5 flex items-center transition-colors ${
-                            voiceEnabled ? 'bg-black' : 'bg-black/15'
-                        }`}
-                    >
-                        <motion.span
-                            layout
-                            transition={{ type: 'spring', stiffness: 500, damping: 32 }}
-                            className="w-5 h-5 rounded-full bg-white shadow-sm"
-                            style={{ marginLeft: voiceEnabled ? 'auto' : 0 }}
-                        />
-                    </button>
-                </div>
-            </section>
-
-            {/* 操作の説明。初見でも迷わないよう、3方向のスワイプを静かに伝える */}
-            <section className="rounded-[14px] bg-black/[0.02] border border-black/5 px-5 py-4 space-y-2">
-                <p className="text-[13px] text-black/50">タップで意味を表示</p>
-                <p className="text-[13px] text-black/50">右へスワイプ → 覚えた</p>
-                <p className="text-[13px] text-black/50">左へスワイプ → もう一度</p>
-                <p className="text-[13px] text-black/50">上へスワイプ → 編集</p>
             </section>
 
             {emptyState === 'unmastered' && (

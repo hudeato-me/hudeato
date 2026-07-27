@@ -1,5 +1,8 @@
 import { motion, type MotionValue } from 'motion/react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { BsVolumeUp, BsVolumeMute } from 'react-icons/bs'
+import { haptic } from '~/lib/haptic'
 import type { Card, CardDirection } from '~/types'
 
 // 反転アニメーション。タップ後に自動で180度回転する（ドラッグ追従はしない）。
@@ -21,6 +24,8 @@ interface FlashCardProps {
     // 音声のON/OFFは表裏共通の1つの状態
     audioEnabled: boolean
     onToggleAudio: () => void
+    // 全文シートの開閉を親へ伝える（開いている間はカードのジェスチャを止める）
+    onFullTextOpenChange?: (open: boolean) => void
 }
 
 // 表に出すテキスト。出題方向で単語と意味が入れ替わる。
@@ -52,84 +57,246 @@ export function FlashCard({
     contentOpacity,
     audioEnabled,
     onToggleAudio,
+    onFullTextOpenChange,
 }: FlashCardProps) {
     // 品詞は先頭の意味から拾う（無ければ行ごと省略する）
     const partOfSpeech = card.meanings[0]?.partOfSpeech?.trim() || null
     const frontTexts = frontTextsOf(card, direction)
     const backTexts = backTextsOf(card, direction)
 
+    // 全文シート。開いている面のテキストを渡す（null=閉じている）
+    const [fullTexts, setFullTexts] = useState<string[] | null>(null)
+    useEffect(() => {
+        onFullTextOpenChange?.(fullTexts !== null)
+    }, [fullTexts, onFullTextOpenChange])
+
     return (
-        <motion.div
-            onClick={onFlip}
-            animate={{ rotateY: flipped ? 180 : 0 }}
-            transition={FLIP_TRANSITION}
-            style={{ transformStyle: 'preserve-3d' }}
-            className="relative h-full w-full cursor-pointer"
-        >
-            {/* 表: 白 */}
-            <div
-                style={{ backfaceVisibility: 'hidden' }}
-                aria-hidden={flipped}
-                className="absolute inset-0 rounded-3xl bg-white border border-black/10 shadow-2xl shadow-black/10 p-6 md:p-8 flex flex-col items-center justify-center overflow-hidden"
+        <>
+            <motion.div
+                onClick={onFlip}
+                animate={{ rotateY: flipped ? 180 : 0 }}
+                transition={FLIP_TRANSITION}
+                style={{ transformStyle: 'preserve-3d' }}
+                className="relative h-full w-full cursor-pointer"
             >
-                <AudioToggle enabled={audioEnabled} onToggle={onToggleAudio} tone="light" />
-                <motion.div
-                    style={{ opacity: contentOpacity }}
-                    className="flex flex-col items-center justify-center gap-3 w-full min-h-0"
-                >
-                    {partOfSpeech && (
-                        <p className="text-xs md:text-sm text-black/40">{partOfSpeech}</p>
-                    )}
-                    <div className="w-full max-w-full space-y-2 overflow-y-auto">
-                        {frontTexts.map((text, index) => (
-                            <p
-                                key={index}
-                                className={`text-center break-words max-w-full px-2 text-black ${
-                                    index === 0
-                                        ? 'text-2xl md:text-3xl lg:text-4xl'
-                                        : 'text-xl md:text-2xl text-black/75'
-                                }`}
-                            >
-                                {text}
-                            </p>
-                        ))}
-                    </div>
-                    <p className="text-xs md:text-sm text-black/30">タップして裏返す</p>
-                </motion.div>
+                {/* 表: 白 */}
+                <CardFace tone="light" hidden={flipped}>
+                    <AudioToggle enabled={audioEnabled} onToggle={onToggleAudio} tone="light" />
+                    <motion.div
+                        style={{ opacity: contentOpacity }}
+                        className="flex flex-col items-center justify-center gap-3 w-full h-full min-h-0"
+                    >
+                        {partOfSpeech && (
+                            <p className="shrink-0 text-xs md:text-sm text-black/40">{partOfSpeech}</p>
+                        )}
+                        <ClampedTexts
+                            texts={frontTexts}
+                            tone="light"
+                            emphasizeFirst
+                            onMore={() => setFullTexts(frontTexts)}
+                        />
+                        <p className="shrink-0 text-xs md:text-sm text-black/30">タップして裏返す</p>
+                    </motion.div>
+                </CardFace>
+
+                {/* 裏: 黒 */}
+                <CardFace tone="dark" hidden={!flipped}>
+                    <AudioToggle enabled={audioEnabled} onToggle={onToggleAudio} tone="dark" />
+                    <motion.div
+                        style={{ opacity: contentOpacity }}
+                        className="flex flex-col items-center justify-center gap-3 w-full h-full min-h-0"
+                    >
+                        {partOfSpeech && (
+                            <p className="shrink-0 text-xs md:text-sm text-white/60">{partOfSpeech}</p>
+                        )}
+                        <ClampedTexts
+                            texts={backTexts}
+                            tone="dark"
+                            onMore={() => setFullTexts(backTexts)}
+                        />
+                        <p className="shrink-0 text-xs md:text-sm text-white/50">タップして裏返す</p>
+                    </motion.div>
+                </CardFace>
+            </motion.div>
+
+            <FullTextSheet
+                texts={fullTexts}
+                partOfSpeech={partOfSpeech}
+                onClose={() => setFullTexts(null)}
+            />
+        </>
+    )
+}
+
+// カードの面。表裏で色だけが違う。
+function CardFace({
+    tone,
+    hidden,
+    children,
+}: {
+    tone: 'light' | 'dark'
+    hidden: boolean
+    children: ReactNode
+}) {
+    return (
+        <div
+            style={{
+                backfaceVisibility: 'hidden',
+                ...(tone === 'dark' ? { transform: 'rotateY(180deg)' } : {}),
+            }}
+            aria-hidden={hidden}
+            className={`absolute inset-0 rounded-3xl shadow-2xl shadow-black/10 p-6 md:p-8 flex flex-col items-center justify-center overflow-hidden ${
+                tone === 'light' ? 'bg-white border border-black/10' : 'bg-black text-white'
+            }`}
+        >
+            {children}
+        </div>
+    )
+}
+
+// カード内に収まらない長文は、下部をグラデーションでフェードさせて「もっと見る」を出す。
+// カード内スクロールにしないのは、スワイプ・タップのジェスチャと競合させないため。
+function ClampedTexts({
+    texts,
+    tone,
+    emphasizeFirst = false,
+    onMore,
+}: {
+    texts: string[]
+    tone: 'light' | 'dark'
+    emphasizeFirst?: boolean
+    onMore: () => void
+}) {
+    const containerRef = useRef<HTMLDivElement>(null)
+    const [isOverflowing, setIsOverflowing] = useState(false)
+
+    // 実際に溢れているかを測って初めてボタンを出す（短文では出さない）
+    useLayoutEffect(() => {
+        const element = containerRef.current
+        if (!element) return
+
+        const check = () => {
+            setIsOverflowing(element.scrollHeight > element.clientHeight + 1)
+        }
+        check()
+
+        const observer = new ResizeObserver(check)
+        observer.observe(element)
+        window.addEventListener('resize', check)
+        return () => {
+            observer.disconnect()
+            window.removeEventListener('resize', check)
+        }
+    }, [texts])
+
+    return (
+        <div className="relative flex-1 min-h-0 w-full">
+            <div ref={containerRef} className="h-full w-full overflow-hidden space-y-2">
+                {texts.map((text, index) => (
+                    <p
+                        key={index}
+                        className={`text-center break-words max-w-full px-2 ${
+                            emphasizeFirst && index === 0
+                                ? 'text-2xl md:text-3xl lg:text-4xl'
+                                : index === 0
+                                  ? 'text-2xl md:text-3xl'
+                                  : tone === 'light'
+                                    ? 'text-xl md:text-2xl text-black/75'
+                                    : 'text-xl md:text-2xl text-white/75'
+                        }`}
+                    >
+                        {text}
+                    </p>
+                ))}
             </div>
 
-            {/* 裏: 黒 */}
+            {isOverflowing && (
+                <>
+                    {/* 下端をカード色へフェードさせ、続きがあることを示す */}
+                    <div
+                        aria-hidden
+                        className={`pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t to-transparent ${
+                            tone === 'light' ? 'from-white' : 'from-black'
+                        }`}
+                    />
+                    <button
+                        type="button"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                            event.stopPropagation()
+                            haptic('light')
+                            onMore()
+                        }}
+                        className={`absolute inset-x-0 bottom-0 mx-auto w-fit px-4 py-1.5 text-[13px] font-medium active:opacity-60 transition-opacity ${
+                            tone === 'light' ? 'text-blue-500' : 'text-blue-300'
+                        }`}
+                    >
+                        もっと見る
+                    </button>
+                </>
+            )}
+        </div>
+    )
+}
+
+// 全文を読むためのボトムシート。カードは3D変換の中にあるため、
+// position:fixed が効くよう body 直下へ Portal する（QuizPlayingScreen のシークバーと同じ理由）。
+function FullTextSheet({
+    texts,
+    partOfSpeech,
+    onClose,
+}: {
+    texts: string[] | null
+    partOfSpeech: string | null
+    onClose: () => void
+}) {
+    const isOpen = texts !== null
+    // 閉じるアニメーションの間も中身を保つ
+    const [shownTexts, setShownTexts] = useState<string[]>([])
+    useEffect(() => {
+        if (texts) setShownTexts(texts)
+    }, [texts])
+
+    if (typeof document === 'undefined') return null
+
+    return createPortal(
+        <div
+            className={`fixed inset-0 z-[100] transition-opacity duration-300 ${
+                isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+            }`}
+        >
+            {/* 背景オーバーレイ */}
+            <button
+                type="button"
+                className="absolute inset-0 bg-black/40 w-full cursor-default"
+                onClick={onClose}
+                aria-label="閉じる"
+            />
+
+            {/* シート本体（QuizExplainSheet と同じ様式） */}
             <div
-                style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
-                aria-hidden={!flipped}
-                className="absolute inset-0 rounded-3xl bg-black text-white shadow-2xl shadow-black/10 p-6 md:p-8 flex flex-col items-center justify-center overflow-hidden"
+                className={`absolute bottom-0 w-full bg-white rounded-t-3xl shadow-xl flex flex-col max-h-[85vh] transition-transform duration-300 ease-out ${
+                    isOpen ? 'translate-y-0' : 'translate-y-full'
+                }`}
             >
-                <AudioToggle enabled={audioEnabled} onToggle={onToggleAudio} tone="dark" />
-                <motion.div
-                    style={{ opacity: contentOpacity }}
-                    className="flex flex-col items-center justify-center gap-3 w-full min-h-0"
-                >
-                    {partOfSpeech && (
-                        <p className="text-xs md:text-sm text-white/60">{partOfSpeech}</p>
-                    )}
-                    <div className="w-full max-w-full space-y-3 overflow-y-auto">
-                        {backTexts.map((text, index) => (
-                            <p
-                                key={index}
-                                className={`text-center break-words max-w-full px-2 ${
-                                    index === 0
-                                        ? 'text-2xl md:text-3xl'
-                                        : 'text-xl md:text-2xl text-white/75'
-                                }`}
-                            >
-                                {text}
-                            </p>
-                        ))}
-                    </div>
-                    <p className="text-xs md:text-sm text-white/50">タップして裏返す</p>
-                </motion.div>
+                <div className="w-full shrink-0 flex justify-center pt-3 pb-2">
+                    <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
+                </div>
+
+                <div className="overflow-y-auto px-6 pb-10 pt-2 space-y-4">
+                    {partOfSpeech && <p className="text-[13px] text-black/40">{partOfSpeech}</p>}
+                    {shownTexts.map((text, index) => (
+                        <p
+                            key={index}
+                            className="text-[1.15rem] leading-relaxed text-black/85 break-words"
+                        >
+                            {text}
+                        </p>
+                    ))}
+                </div>
             </div>
-        </motion.div>
+        </div>,
+        document.body,
     )
 }
 
@@ -153,7 +320,7 @@ function AudioToggle({
                 event.stopPropagation()
                 onToggle()
             }}
-            className={`absolute top-4 right-4 h-10 w-10 rounded-full backdrop-blur-sm flex items-center justify-center transition-colors active:scale-90 ${
+            className={`absolute top-4 right-4 z-10 h-10 w-10 rounded-full backdrop-blur-sm flex items-center justify-center transition-colors active:scale-90 ${
                 tone === 'light'
                     ? 'bg-black/[0.04] text-black/60'
                     : 'bg-white/15 text-white/80'

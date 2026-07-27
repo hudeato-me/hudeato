@@ -171,6 +171,8 @@ function SwipeableCard({
     onEdit: () => void
 }) {
     const [flipped, setFlipped] = useState(false)
+    // 全文シートを開いている間はカードのドラッグ・反転を止める
+    const [isFullTextOpen, setIsFullTextOpen] = useState(false)
     const { enabled: audioEnabled, toggle: toggleAudio } = useCardAudioEnabled()
 
     // OFFにした瞬間は再生中の音声を止め、ONにした瞬間は今見ている面をすぐ読み上げる
@@ -249,7 +251,7 @@ function SwipeableCard({
 
     return (
         <motion.div
-            drag={!disabled}
+            drag={!disabled && !isFullTextOpen}
             dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
             dragElastic={0.7}
             onDragEnd={handleDragEnd}
@@ -265,12 +267,14 @@ function SwipeableCard({
                 direction={direction}
                 flipped={flipped}
                 onFlip={() => {
+                    if (isFullTextOpen) return
                     haptic('light')
                     setFlipped((value) => !value)
                 }}
                 contentOpacity={contentOpacity}
                 audioEnabled={audioEnabled}
                 onToggleAudio={handleToggleAudio}
+                onFullTextOpenChange={setIsFullTextOpen}
             />
 
             {/* ドラッグ中の方向ラベル。本文と入れ替わりで見える */}

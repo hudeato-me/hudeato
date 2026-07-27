@@ -1,7 +1,7 @@
 import { motion, type MotionValue } from 'motion/react'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
 import { BsVolumeUp, BsVolumeMute } from 'react-icons/bs'
+import { BottomSheet } from '~/components/BottomSheet'
 import { haptic } from '~/lib/haptic'
 import type { Card, CardDirection } from '~/types'
 
@@ -193,7 +193,12 @@ function ClampedTexts({
 
     return (
         <div className="relative flex-1 min-h-0 w-full">
-            <div ref={containerRef} className="h-full w-full overflow-hidden space-y-2">
+            <div
+                ref={containerRef}
+                className={`h-full w-full overflow-hidden space-y-2 flex flex-col ${
+                    isOverflowing ? 'justify-start' : 'justify-center'
+                }`}
+            >
                 {texts.map((text, index) => (
                     // 意味が複数あっても大きさ・濃さは揃える（どれも等しく覚える対象のため）
                     <p
@@ -236,8 +241,7 @@ function ClampedTexts({
     )
 }
 
-// 全文を読むためのボトムシート。カードは3D変換の中にあるため、
-// position:fixed が効くよう body 直下へ Portal する（QuizPlayingScreen のシークバーと同じ理由）。
+// 全文を読むためのボトムシート。共通の BottomSheet（つまみ・下スワイプで閉じる）を使う。
 function FullTextSheet({
     texts,
     partOfSpeech,
@@ -254,46 +258,17 @@ function FullTextSheet({
         if (texts) setShownTexts(texts)
     }, [texts])
 
-    if (typeof document === 'undefined') return null
-
-    return createPortal(
-        <div
-            className={`fixed inset-0 z-[100] transition-opacity duration-300 ${
-                isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-            }`}
-        >
-            {/* 背景オーバーレイ */}
-            <button
-                type="button"
-                className="absolute inset-0 bg-black/40 w-full cursor-default"
-                onClick={onClose}
-                aria-label="閉じる"
-            />
-
-            {/* シート本体（QuizExplainSheet と同じ様式） */}
-            <div
-                className={`absolute bottom-0 w-full bg-white rounded-t-3xl shadow-xl flex flex-col max-h-[85vh] transition-transform duration-300 ease-out ${
-                    isOpen ? 'translate-y-0' : 'translate-y-full'
-                }`}
-            >
-                <div className="w-full shrink-0 flex justify-center pt-3 pb-2">
-                    <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
-                </div>
-
-                <div className="overflow-y-auto px-6 pb-10 pt-2 space-y-4">
-                    {partOfSpeech && <p className="text-[13px] text-black/40">{partOfSpeech}</p>}
-                    {shownTexts.map((text, index) => (
-                        <p
-                            key={index}
-                            className="text-[1.15rem] leading-relaxed text-black/85 break-words"
-                        >
-                            {text}
-                        </p>
-                    ))}
-                </div>
+    return (
+        <BottomSheet isOpen={isOpen} onClose={onClose}>
+            <div className="px-6 pb-10 pt-2 space-y-4">
+                {partOfSpeech && <p className="text-[13px] text-black/40">{partOfSpeech}</p>}
+                {shownTexts.map((text, index) => (
+                    <p key={index} className="text-[1.15rem] leading-relaxed text-black/85 break-words">
+                        {text}
+                    </p>
+                ))}
             </div>
-        </div>,
-        document.body,
+        </BottomSheet>
     )
 }
 

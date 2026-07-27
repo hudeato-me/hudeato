@@ -164,9 +164,11 @@ function ClampedTexts({
 }: {
     texts: string[]
     tone: 'light' | 'dark'
+    // 1件だけのとき（表の単語など）はさらに大きく見せる
     emphasizeFirst?: boolean
     onMore: () => void
 }) {
+    const isSingleLargeText = emphasizeFirst && texts.length === 1
     const containerRef = useRef<HTMLDivElement>(null)
     const [isOverflowing, setIsOverflowing] = useState(false)
 
@@ -193,17 +195,12 @@ function ClampedTexts({
         <div className="relative flex-1 min-h-0 w-full">
             <div ref={containerRef} className="h-full w-full overflow-hidden space-y-2">
                 {texts.map((text, index) => (
+                    // 意味が複数あっても大きさ・濃さは揃える（どれも等しく覚える対象のため）
                     <p
                         key={index}
                         className={`text-center break-words max-w-full px-2 ${
-                            emphasizeFirst && index === 0
-                                ? 'text-2xl md:text-3xl lg:text-4xl'
-                                : index === 0
-                                  ? 'text-2xl md:text-3xl'
-                                  : tone === 'light'
-                                    ? 'text-xl md:text-2xl text-black/75'
-                                    : 'text-xl md:text-2xl text-white/75'
-                        }`}
+                            tone === 'light' ? 'text-black' : 'text-white'
+                        } ${isSingleLargeText ? 'text-2xl md:text-3xl lg:text-4xl' : 'text-2xl md:text-3xl'}`}
                     >
                         {text}
                     </p>

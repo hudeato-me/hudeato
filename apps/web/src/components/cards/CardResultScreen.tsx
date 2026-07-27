@@ -16,7 +16,10 @@ export function CardResultScreen({
     isLoading,
 }: CardResultScreenProps) {
     return (
-        <div className="min-h-[calc(100dvh_-_1.25rem_-_1rem)] flex flex-col items-center justify-center gap-6 px-6 text-center">
+        // 完了画面は没入モードを抜けている（Header/Footerが戻っている）ため、
+        // カード画面と同じ 100dvh 基準にすると縦に溢れてスクロールしてしまう。
+        // ヘッダーとフッターのぶんを残した高さに収め、その中で上下中央に置く。
+        <div className="min-h-[60vh] flex flex-col items-center justify-center gap-6 px-6 text-center">
             <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}

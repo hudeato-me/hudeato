@@ -1,0 +1,146 @@
+
+ ⛅️ wrangler 3.114.17 (update available 4.115.0)
+------------------------------------------------
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mThe version of Wrangler you are using is now out-of-date.[0m
+
+  Please update to the latest version to prevent critical errors.
+  Run `npm install --save-dev wrangler@4` to update to the latest version.
+  After installation, run Wrangler with `npx wrangler`.
+
+
+Using vars defined in .dev.vars
+Your Worker and resources are simulated locally via Miniflare. For more information, see: https://developers.cloudflare.com/workers/testing/local-development.
+
+Your worker has access to the following bindings:
+- KV Namespaces:
+  - MEANING_CACHE: 00303457d1914600940492abf7158e50 [simulated locally]
+- Queues:
+  - WORD_COMPLETION_QUEUE: word-completion [simulated locally]
+- R2 Buckets:
+  - IMAGES_BUCKET: hudeato-dev-images [simulated locally]
+- AI:
+  - Name: AI [connected to remote resource]
+- Vars:
+  - ENVIRONMENT: "development"
+  - TURSO_DATABASE_URL: "(hidden)"
+  - TURSO_AUTH_TOKEN: "(hidden)"
+  - BETTER_AUTH_BASE_URL: "(hidden)"
+  - BETTER_AUTH_SECRET: "(hidden)"
+  - UPSTASH_REDIS_REST_URL: "(hidden)"
+  - UPSTASH_REDIS_REST_TOKEN: "(hidden)"
+  - GOOGLE_TTS_API_KEY: "(hidden)"
+  - DEV_ALLOWED_ORIGINS: "(hidden)"
+[wrangler:inf] Ready on http://192.168.0.189:8787
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mUsing Workers AI always accesses your Cloudflare account in order to run AI models, and so will incur usage charges even in local development.[0m
+
+
+⎔ Starting local server...
+[wrangler:inf] GET /health 200 OK (9ms)
+[wrangler:inf] GET /api/v1/cards/x 401 Unauthorized (14ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] POST /api/auth/sign-in/email 200 OK (507ms)
+[wrangler:inf] OPTIONS /api/auth/sign-in/email 204 No Content (42ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] POST /api/auth/sign-in/email 200 OK (520ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (26ms)
+[wrangler:inf] GET /api/v1/sets 200 OK (51ms)
+[wrangler:inf] GET /api/dashboard/summary 200 OK (117ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (16ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (23ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (24ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (12ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (8ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (15ms)
+[wrangler:inf] GET /api/v1/cards/403fb0b4-ad1c-40f9-bbe2-83576a8374bb 200 OK (71ms)
+[wrangler:inf] GET /api/v1/tts 200 OK (382ms)
+[wrangler:inf] GET /api/v1/tts 200 OK (746ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (10ms)
+[wrangler:inf] GET /api/v1/sets 200 OK (66ms)
+[wrangler:inf] GET /api/v1/cards/403fb0b4-ad1c-40f9-bbe2-83576a8374bb 200 OK (20ms)
+[wrangler:inf] GET /api/v1/tts 200 OK (17ms)
+[wrangler:inf] GET /api/v1/tts 200 OK (16ms)
+[wrangler:inf] OPTIONS /api/v1/cards/403fb0b4-ad1c-40f9-bbe2-83576a8374bb/swipe 204 No Content (7ms)
+[wrangler:inf] POST /api/v1/cards/403fb0b4-ad1c-40f9-bbe2-83576a8374bb/swipe 201 Created (533ms)
+[wrangler:inf] GET /api/v1/tts 200 OK (353ms)
+[wrangler:inf] GET /api/v1/tts 200 OK (850ms)
+[wrangler:inf] POST /api/v1/cards/403fb0b4-ad1c-40f9-bbe2-83576a8374bb/swipe 201 Created (168ms)
+[wrangler:inf] GET /api/v1/tts 200 OK (303ms)
+[wrangler:inf] GET /api/v1/sets/403fb0b4-ad1c-40f9-bbe2-83576a8374bb/words/6390ed88-c3e6-42cb-a628-1db88023285d 200 OK (21ms)
+[wrangler:inf] GET /api/v1/cards/403fb0b4-ad1c-40f9-bbe2-83576a8374bb 200 OK (21ms)
+[wrangler:inf] POST /api/v1/cards/403fb0b4-ad1c-40f9-bbe2-83576a8374bb/swipe 201 Created (243ms)
+[wrangler:inf] GET /api/v1/tts 200 OK (320ms)
+[wrangler:inf] POST /api/v1/cards/403fb0b4-ad1c-40f9-bbe2-83576a8374bb/swipe 201 Created (146ms)
+[wrangler:inf] GET /api/v1/cards/403fb0b4-ad1c-40f9-bbe2-83576a8374bb 200 OK (301ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (13ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (23ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (17ms)
+[wrangler:inf] GET /api/dashboard/summary 200 OK (301ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (12ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (11ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (10ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (5ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (5ms)
+[wrangler:inf] GET /api/v1/sets/403fb0b4-ad1c-40f9-bbe2-83576a8374bb/words 200 OK (81ms)
+[wrangler:inf] GET /api/v1/sets 200 OK (786ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (21ms)
+[wrangler:inf] GET /api/v1/sets 200 OK (19ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (5ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (17ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (21ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (9ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (8ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (9ms)
+[wrangler:inf] GET /api/v1/cards/403fb0b4-ad1c-40f9-bbe2-83576a8374bb 200 OK (19ms)
+[wrangler:inf] GET /api/v1/sets/403fb0b4-ad1c-40f9-bbe2-83576a8374bb/words/d7d01b68-0ddb-46ca-ad8c-8156936d54aa 200 OK (18ms)
+[wrangler:inf] GET /api/v1/cards/403fb0b4-ad1c-40f9-bbe2-83576a8374bb 200 OK (18ms)
+⎔ Reloading local server...
+⎔ Reloading local server...

@@ -124,9 +124,15 @@ export const saveReviewInTx = async (
 	return state!;
 };
 
+// 意味が入力済み（空文字・空白のみでない）の行に限定する条件。
+// 空欄の意味はクイズにもカードにも出題されないため、学習状態の集計対象から除外する。
+export const answerableMeaning = sql`trim(${wordMeaning.meaning}) <> ''`;
+
 // 単語の isMastered を配下 meaning の isRemembered から再計算し、word に反映する。
-// ルールは「meaning が1件以上あり、全て isRemembered=true」→ true、それ以外 → false
+// ルールは「入力済みの meaning が1件以上あり、全て isRemembered=true」→ true、それ以外 → false
 // （word-schema.ts のコメントに書かれた既存の導出ルール）。
+// 空欄の意味は出題されない＝ユーザーが覚えたか判定しようがないため、母数に含めない
+// （含めると、出題されない行のせいで永久に習得済みにならない）。
 // クイズの回答記録・カードのスワイプ記録が共有するため study 側に置く。
 // 全行取得ではなく件数集計で判定する。呼び出し元のトランザクション内で使う。
 export const recalcMasteredInTx = async (tx: Tx, wordId: string) => {
@@ -138,7 +144,7 @@ export const recalcMasteredInTx = async (tx: Tx, wordId: string) => {
 			),
 		})
 		.from(wordMeaning)
-		.where(eq(wordMeaning.wordId, wordId));
+		.where(and(eq(wordMeaning.wordId, wordId), answerableMeaning));
 
 	const isMastered = total > 0 && unrememberedCount === 0;
 

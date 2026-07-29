@@ -145,6 +145,9 @@ function CardFace({
                 ...(tone === 'dark' ? { transform: 'rotateY(180deg)' } : {}),
             }}
             aria-hidden={hidden}
+            // 裏返って見えていない面は inert にする。aria-hidden だけでは音量ボタンや
+            // 「もっと見る」がタブフォーカス・ポインタ操作を受け取れてしまう。
+            inert={hidden}
             className={`absolute inset-0 rounded-3xl shadow-2xl shadow-black/10 p-6 md:p-8 flex flex-col items-center justify-center overflow-hidden ${
                 tone === 'light' ? 'bg-white border border-black/10' : 'bg-black text-white'
             }`}

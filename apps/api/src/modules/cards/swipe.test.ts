@@ -22,6 +22,10 @@ const multiMeaningId1 = "swipe-meaning-multi-1";
 const multiMeaningId2 = "swipe-meaning-multi-2";
 // 意味なし（デッキには出ないが、防御的な挙動を確認する）
 const noMeaningWordId = "swipe-word-no-meaning";
+// 入力済みの意味と空欄の意味が混在する単語（カードには入力済みの意味だけが出る）
+const partialWordId = "swipe-word-partial";
+const partialFilledMeaningId = "swipe-meaning-partial-filled";
+const partialBlankMeaningId = "swipe-meaning-partial-blank";
 
 beforeAll(async () => {
 	ctx = createTestContext() as TestContext & {
@@ -37,10 +41,19 @@ beforeAll(async () => {
 	await db.insert(word).values([
 		{ id: multiWordId, userId, wordSetId: setId, text: "ephemeral" },
 		{ id: noMeaningWordId, userId, wordSetId: setId, text: "nomeaning" },
+		{ id: partialWordId, userId, wordSetId: setId, text: "partial" },
 	]);
 	await db.insert(wordMeaning).values([
 		{ id: multiMeaningId1, wordId: multiWordId, meaning: "短命な", slot: 1 },
 		{ id: multiMeaningId2, wordId: multiWordId, meaning: "はかない", slot: 2 },
+		{
+			id: partialFilledMeaningId,
+			wordId: partialWordId,
+			meaning: "入力済みの意味",
+			slot: 1,
+		},
+		// AI補完待ちなどで空欄のまま残っている意味（カードの裏面には出ない）
+		{ id: partialBlankMeaningId, wordId: partialWordId, meaning: "   ", slot: 2 },
 	]);
 });
 
@@ -122,6 +135,33 @@ describe("recordCardSwipe", () => {
 		});
 		expect(logs).toHaveLength(4);
 		expect(logs.filter((log) => log.result === "unknown")).toHaveLength(2);
+	});
+
+	it("空欄の意味は記録対象にせず、習得判定の母数にも含めない", async () => {
+		const result = await recordCardSwipe(db, {
+			wordId: partialWordId,
+			remembered: true,
+		});
+
+		// 表示された意味だけが「覚えた」になり、それで習得済みと判定される
+		expect(result).toEqual({ isRemembered: true, isMastered: true });
+
+		const filled = await db.query.wordMeaning.findFirst({
+			where: eq(wordMeaning.id, partialFilledMeaningId),
+		});
+		expect(filled!.isRemembered).toBe(true);
+
+		// カードに出ていない空欄の意味は触らない
+		const blank = await db.query.wordMeaning.findFirst({
+			where: eq(wordMeaning.id, partialBlankMeaningId),
+		});
+		expect(blank!.isRemembered).toBe(false);
+
+		const logs = await db.query.reviewLog.findMany({
+			where: eq(reviewLog.wordId, partialWordId),
+		});
+		expect(logs).toHaveLength(1);
+		expect(logs[0].meaningId).toBe(partialFilledMeaningId);
 	});
 
 	it("意味を持たない単語は何も記録せず isRemembered/isMastered ともに false", async () => {

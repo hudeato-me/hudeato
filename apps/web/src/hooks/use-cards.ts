@@ -77,8 +77,17 @@ export const useSwipeCard = (wordSetId: string, scope: CardScope) => {
 		},
 		onMutate: async (data) => {
 			const queryKey = cardKeys.deck(wordSetId, scope);
+			// 進行中の再取得が楽観更新のあとに解決して上書きするのを防ぐ
+			await queryClient.cancelQueries({ queryKey });
+
 			const previous = queryClient.getQueryData<CardsResponse>(queryKey);
-			if (!previous) return { previous };
+			// ロールバック用に、この単語1件分の状態だけを控える。
+			// スワイプは連続で投げられるため、スナップショット全体を書き戻すと
+			// 後続の別カードの楽観更新まで巻き戻してしまう。
+			const previousCard = previous?.cards.find(
+				(card) => card.wordId === data.wordId,
+			);
+			if (!previous) return { previousCard };
 
 			// 評価は単語単位なので、配下の全ての意味に同じ結果を当てる（サーバーと同じ導出）
 			queryClient.setQueryData<CardsResponse>(queryKey, {
@@ -96,15 +105,25 @@ export const useSwipeCard = (wordSetId: string, scope: CardScope) => {
 						: card,
 				),
 			});
-			return { previous };
+			return { previousCard };
 		},
 		onError: (_error, _data, context) => {
-			if (context?.previous) {
-				queryClient.setQueryData(
-					cardKeys.deck(wordSetId, scope),
-					context.previous,
-				);
-			}
+			const previousCard = context?.previousCard;
+			if (!previousCard) return;
+
+			// 失敗した単語だけを元に戻す（他のカードの楽観更新はそのまま残す）
+			queryClient.setQueryData<CardsResponse>(
+				cardKeys.deck(wordSetId, scope),
+				(current) =>
+					current
+						? {
+								...current,
+								cards: current.cards.map((card) =>
+									card.wordId === previousCard.wordId ? previousCard : card,
+								),
+							}
+						: current,
+			);
 		},
 	});
 };

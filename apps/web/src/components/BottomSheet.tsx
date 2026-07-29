@@ -53,6 +53,9 @@ export function BottomSheet({
 
     return createPortal(
         <div
+            // 閉じている間も DOM には残るため、inert でフォーカス・操作を止める
+            // （pointer-events-none だけではキーボード操作で中身に入れてしまう）
+            inert={!isOpen}
             className={`fixed inset-0 z-[100] transition-opacity duration-300 ${
                 isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
             }`}

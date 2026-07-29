@@ -129,7 +129,11 @@ export function CardDeckScreen({
                                 stop()
                                 onEvaluate(remembered)
                             }}
-                            onEdit={() => onEdit(card.wordId)}
+                            onEdit={() => {
+                                // 編集ドロワーの裏で再生が続かないよう、評価・終了と同じく止める
+                                stop()
+                                onEdit(card.wordId)
+                            }}
                         />
                     </AnimatePresence>
                 </div>

@@ -144,3 +144,12 @@ DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
 [wrangler:inf] GET /api/v1/cards/403fb0b4-ad1c-40f9-bbe2-83576a8374bb 200 OK (18ms)
 ⎔ Reloading local server...
 ⎔ Reloading local server...
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (47ms)
+[wrangler:inf] GET /api/v1/sets 200 OK (256ms)
+Request to /api/auth/*
+DB URL: libsql://hudeato-dev-hudeato-me.aws-ap-northeast-1.turso.io
+[wrangler:inf] GET /api/auth/get-session 200 OK (10ms)
+[wrangler:inf] GET /api/v1/sets 200 OK (642ms)
+⎔ Reloading local server...

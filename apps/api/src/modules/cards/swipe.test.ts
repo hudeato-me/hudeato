@@ -52,8 +52,14 @@ beforeAll(async () => {
 			meaning: "入力済みの意味",
 			slot: 1,
 		},
-		// AI補完待ちなどで空欄のまま残っている意味（カードの裏面には出ない）
-		{ id: partialBlankMeaningId, wordId: partialWordId, meaning: "   ", slot: 2 },
+		// AI補完待ちなどで空欄のまま残っている意味（カードの裏面には出ない）。
+		// 半角スペース以外の空白（タブ・改行）も空欄として扱えることを確認する。
+		{
+			id: partialBlankMeaningId,
+			wordId: partialWordId,
+			meaning: " \t\n\r ",
+			slot: 2,
+		},
 	]);
 });
 

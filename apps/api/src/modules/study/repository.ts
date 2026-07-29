@@ -126,7 +126,10 @@ export const saveReviewInTx = async (
 
 // 意味が入力済み（空文字・空白のみでない）の行に限定する条件。
 // 空欄の意味はクイズにもカードにも出題されないため、学習状態の集計対象から除外する。
-export const answerableMeaning = sql`trim(${wordMeaning.meaning}) <> ''`;
+// SQLite の1引数 trim() は半角スペースしか削らないため、タブ・改行・復帰も
+// 明示して渡す（JS 側の String.prototype.trim() と判定を揃えるため）。
+export const answerableMeaning =
+	sql`trim(${wordMeaning.meaning}, ' ' || char(9) || char(10) || char(13)) <> ''`;
 
 // 単語の isMastered を配下 meaning の isRemembered から再計算し、word に反映する。
 // ルールは「入力済みの meaning が1件以上あり、全て isRemembered=true」→ true、それ以外 → false

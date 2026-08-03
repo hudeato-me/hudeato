@@ -34,6 +34,9 @@
     （複数アカウント環境では `CLOUDFLARE_ACCOUNT_ID` の指定が必要）
 - AI出力の共有キャッシュは workers kv（`global:meaning:{word}:{lang}`, TTL 30日）
 - upstash redis はレート制限・認証セッション用に残す
+- 発音音声（P2）: Google Cloud Text-to-Speech（公式REST API）を採用。env `GOOGLE_TTS_API_KEY`（本番は wrangler secret）
+  - 選定理由: 公式APIで従量無料枠内に収まる・Workers から REST で薄く呼べる
+  - 生成した音声は workers kv に30日キャッシュ（`tts:{lang}:{voice}:{text}`）
 
 ## webfront
 

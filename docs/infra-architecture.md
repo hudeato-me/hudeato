@@ -32,6 +32,7 @@ graph TB
         DB[(Turso libSQL<br/>Main DB)]:::ext
         Vector[(Turso Vector<br/>Embeddings)]:::ext
         Redis[(Upstash Redis<br/>Rate Limit / Auth Session)]:::ext
+        TTS[Google Cloud<br/>Text-to-Speech]:::ext
     end
 
     %% 接続線
@@ -46,6 +47,8 @@ graph TB
     API -->|Read Cache| KV
     API -->|Signed URL| R2
     API -->|Enqueue Job| Queue
+    API -->|Synthesize Speech| TTS
+    API -->|Cache Audio| KV
 
     %% 非同期ワーカーの責務
     Queue --> |Job| Consumer

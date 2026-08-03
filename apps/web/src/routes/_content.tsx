@@ -1,4 +1,5 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
+import { AnimatePresence, motion } from 'motion/react'
 import { useState } from 'react'
 import { Header } from '~/components/Header'
 import { Footer } from '~/components/Footer'
@@ -34,6 +35,8 @@ function ContentLayout() {
     const [isWordSetDrawerOpen, setIsWordSetDrawerOpen] = useState(false)
     const [selectedIdState, setSelectedIdState] = useState<string | null>(null)
     const [settingsSetId, setSettingsSetId] = useState<string | null>(null)
+    // 没入モード（クイズ出題中）。ONの間はHeader/Footerを退場させる。
+    const [immersive, setImmersive] = useState(false)
     const { data: wordSets = [] } = useWordSets(true)
     const selectedWordSetId = selectedIdState ?? wordSets[0]?.id ?? null
     const selectedWordSetName = wordSets.find((s: WordSet) => s.id === selectedWordSetId)?.name ?? ''
@@ -41,19 +44,34 @@ function ContentLayout() {
 
 
     return (
-        <ContentContext.Provider value={{ selectedWordSetId, wordSets }}>
+        <ContentContext.Provider value={{ selectedWordSetId, wordSets, setImmersive }}>
             <div className="min-h-screen bg-white text-black/80">
-                <div className="max-w-[430px] mx-auto px-4 pt-5 pb-30">
-                    <Header
-                        currentWordSet={selectedWordSetName}
-                        onOpenWordSet={() => setIsWordSetDrawerOpen(true)}
-                        onLogout={async () => {
-                            await authClient.signOut()
-                            queryClient.clear()
-                            const { del } = await import('idb-keyval')
-                            await del('REACT_QUERY_OFFLINE_CACHE')
-                        }}
-                    />
+                {/* immersive時(クイズ出題中)はFooterのクリアランスが不要なため下余白を最小化する。
+                    QuizPlayingScreen側のmin-height計算(100dvh - pt-5 - この下余白)と値を揃えて
+                    いるため、変更する場合は両方を同期させること。 */}
+                <div className={`max-w-[430px] mx-auto px-4 pt-5 ${immersive ? 'pb-4' : 'pb-30'}`}>
+                    <AnimatePresence initial={false}>
+                        {!immersive && (
+                            <motion.div
+                                key="header"
+                                initial={{ opacity: 0, y: -8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -8 }}
+                                transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                            >
+                                <Header
+                                    currentWordSet={selectedWordSetName}
+                                    onOpenWordSet={() => setIsWordSetDrawerOpen(true)}
+                                    onLogout={async () => {
+                                        await authClient.signOut()
+                                        queryClient.clear()
+                                        const { del } = await import('idb-keyval')
+                                        await del('REACT_QUERY_OFFLINE_CACHE')
+                                    }}
+                                />
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                     <AnimatedOutlet />
                 </div>
 
@@ -75,7 +93,7 @@ function ContentLayout() {
                     currentSettings={settingsWordSet?.settings ?? null}
                     onClose={() => setSettingsSetId(null)}
                 />
-                {selectedWordSetId && <Footer wordSetId={selectedWordSetId} />}
+                {selectedWordSetId && <Footer wordSetId={selectedWordSetId} immersive={immersive} />}
             </div>
         </ContentContext.Provider>
     )

@@ -1,4 +1,4 @@
-import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, count, eq, ne, sql } from "drizzle-orm";
 import type { ReviewMode, ReviewResult, StudyScope } from "@hudeato/schema";
 import { reviewLog, reviewState, word, wordEmbedding, wordMeaning } from "../../db";
 import { Db } from "../../types/words-route-type";
@@ -122,6 +122,38 @@ export const saveReviewInTx = async (
 	});
 	// 直前に upsert しているため必ず存在する
 	return state!;
+};
+
+// 意味が入力済み（空文字・空白のみでない）の行に限定する条件。
+// 空欄の意味はクイズにもカードにも出題されないため、学習状態の集計対象から除外する。
+// SQLite の1引数 trim() は半角スペースしか削らないため、タブ・改行・復帰も
+// 明示して渡す（JS 側の String.prototype.trim() と判定を揃えるため）。
+export const answerableMeaning =
+	sql`trim(${wordMeaning.meaning}, ' ' || char(9) || char(10) || char(13)) <> ''`;
+
+// 単語の isMastered を配下 meaning の isRemembered から再計算し、word に反映する。
+// ルールは「入力済みの meaning が1件以上あり、全て isRemembered=true」→ true、それ以外 → false
+// （word-schema.ts のコメントに書かれた既存の導出ルール）。
+// 空欄の意味は出題されない＝ユーザーが覚えたか判定しようがないため、母数に含めない
+// （含めると、出題されない行のせいで永久に習得済みにならない）。
+// クイズの回答記録・カードのスワイプ記録が共有するため study 側に置く。
+// 全行取得ではなく件数集計で判定する。呼び出し元のトランザクション内で使う。
+export const recalcMasteredInTx = async (tx: Tx, wordId: string) => {
+	const [{ total, unrememberedCount }] = await tx
+		.select({
+			total: count(),
+			unrememberedCount: count(
+				sql`CASE WHEN ${wordMeaning.isRemembered} = false THEN 1 END`,
+			),
+		})
+		.from(wordMeaning)
+		.where(and(eq(wordMeaning.wordId, wordId), answerableMeaning));
+
+	const isMastered = total > 0 && unrememberedCount === 0;
+
+	await tx.update(word).set({ isMastered }).where(eq(word.id, wordId));
+
+	return isMastered;
 };
 
 // レビュー結果を記録する最小版。saveReviewInTx を1トランザクションで包むだけ。

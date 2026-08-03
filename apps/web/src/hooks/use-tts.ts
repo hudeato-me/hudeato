@@ -11,17 +11,21 @@ export const ttsLangForDirection = (direction: QuizDirection): TtsLang =>
     direction === 'wordToMeaning' ? 'en' : 'ja'
 
 // ===========================================================================
-// 音声トグル（クイズ全体で1つの状態）
+// 音声トグル（学習機能全体で1つの状態。クイズ・カードで共有する）
 // localStorageに永続化し、出題画面・設定画面など複数コンポーネントから同じ状態を
 // 参照・更新できるよう、モジュールスコープのストア + useSyncExternalStore で同期する。
 // ===========================================================================
 
-const VOICE_ENABLED_STORAGE_KEY = 'hudeato:quiz-voice'
+const VOICE_ENABLED_STORAGE_KEY = 'hudeato:voice'
+// クイズ専用だった頃のキー。既存ユーザーの設定を引き継ぐために読み込み時だけ見る。
+const LEGACY_VOICE_ENABLED_STORAGE_KEY = 'hudeato:quiz-voice'
 
 const readStoredVoiceEnabled = (): boolean => {
     if (typeof window === 'undefined') return true
     try {
-        const raw = window.localStorage.getItem(VOICE_ENABLED_STORAGE_KEY)
+        const raw =
+            window.localStorage.getItem(VOICE_ENABLED_STORAGE_KEY) ??
+            window.localStorage.getItem(LEGACY_VOICE_ENABLED_STORAGE_KEY)
         // 未設定時は自動再生ONをデフォルトにする（まず機能の価値を体験してもらう）
         return raw === null ? true : raw === 'true'
     } catch {

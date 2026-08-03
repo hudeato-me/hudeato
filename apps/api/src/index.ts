@@ -13,10 +13,20 @@ import wordSets from "./routes/word-sets";
 import upload from "./routes/upload";
 import study from "./routes/study";
 import quiz from "./routes/quiz";
+import cards from "./routes/cards";
 import tts from "./routes/tts";
 import { rateLimiter } from "./utils/rate-limiter";
 
 const app = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>();
+
+// .dev.vars の DEV_ALLOWED_ORIGINS（カンマ区切り）に含まれるオリジンかを判定する。
+// 実機（スマホ・別マシン）からの動作確認で使い、値はリポジトリに含めない。
+export const isAllowedByEnv = (origin: string, allowList?: string) =>
+	(allowList ?? "")
+		.split(",")
+		.map((entry) => entry.trim())
+		.filter(Boolean)
+		.includes(origin);
 
 // ログインしているか検証し、その後の処理で使う DB やユーザー情報をまとめて次に渡す
 const protectedMiddleware = createMiddleware<{
@@ -45,12 +55,17 @@ const protectedMiddleware = createMiddleware<{
 app.use(
 	"*",
 	cors({
-		origin: (origin) => {
+		origin: (origin, c) => {
 			if (
 				!origin ||
 				origin.startsWith("http://localhost:") ||
 				origin.startsWith("http://192.168.")
 			) {
+				return origin;
+			}
+			// 追加の許可オリジンは .dev.vars（DEV_ALLOWED_ORIGINS, カンマ区切り）で渡す。
+			// 実機確認用のホストをコードに直書きしないため。
+			if (isAllowedByEnv(origin, c.env.DEV_ALLOWED_ORIGINS)) {
 				return origin;
 			}
 			return "http://localhost:3000";
@@ -90,6 +105,7 @@ const api = new Hono<{ Bindings: Bindings; Variables: WordsRouteVariables }>()
 	.route("/v1/sets/:setId/words", words)
 	.route("/v1/study", study)
 	.route("/v1/quiz", quiz)
+	.route("/v1/cards", cards)
 	.route("/v1/tts", tts)
 	.route("/v1/upload", upload)
 	.route("/dashboard", dashboard);

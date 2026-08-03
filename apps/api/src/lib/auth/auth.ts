@@ -9,6 +9,7 @@ const getAuth = (c: Context) => {
 			betterAuthBaseUrl: c.env.BETTER_AUTH_BASE_URL,
 			upstashRedisRestUrl: c.env.UPSTASH_REDIS_REST_URL,
 			upstashRedisRestToken: c.env.UPSTASH_REDIS_REST_TOKEN,
+			devAllowedOrigins: c.env.DEV_ALLOWED_ORIGINS,
 		}
 	)
 };

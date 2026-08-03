@@ -1,3 +1,4 @@
+import { BottomSheet } from '~/components/BottomSheet'
 import { useQuizExplanation } from '~/hooks/use-quiz'
 import { haptic } from '~/lib/haptic'
 import type { QuizExplainMeaning } from '~/types'
@@ -11,37 +12,14 @@ interface QuizExplainSheetProps {
     onEdit: (wordId: string) => void
 }
 
-// 結果一覧タップ時の解説ボトムシート。WordEntryDrawer と同じ様式
-// （オーバーレイ + rounded-t-3xl + ドラッグハンドル）に合わせる。
+// 結果一覧タップ時の解説ボトムシート。共通の BottomSheet
+// （オーバーレイ + rounded-t-3xl + つまみ・下スワイプで閉じる）を使う。
 export function QuizExplainSheet({ isOpen, onClose, wordSetId, wordId, onEdit }: QuizExplainSheetProps) {
     const { data: explain, isLoading, isError } = useQuizExplanation(wordSetId, wordId ?? '', isOpen && !!wordId)
 
     return (
-        <div
-            className={`fixed inset-0 z-[100] transition-opacity duration-300 ${
-                isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-            }`}
-        >
-            {/* 背景オーバーレイ */}
-            <button
-                type="button"
-                className="absolute inset-0 bg-black/40 w-full cursor-default"
-                onClick={onClose}
-                aria-label="閉じる"
-            />
-
-            {/* シート本体 */}
-            <div
-                className={`absolute bottom-0 w-full bg-white rounded-t-3xl shadow-xl flex flex-col max-h-[85vh] transition-transform duration-300 ease-out ${
-                    isOpen ? 'translate-y-0' : 'translate-y-full'
-                }`}
-            >
-                {/* ドラッグハンドル */}
-                <div className="w-full shrink-0 flex justify-center pt-3 pb-2">
-                    <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
-                </div>
-
-                <div className="overflow-y-auto px-6 pb-8 pt-2 space-y-6">
+        <BottomSheet isOpen={isOpen} onClose={onClose}>
+            <div className="px-6 pb-8 pt-2 space-y-6">
                     {isError ? (
                         <div className="py-10 text-center text-sm text-black/40">
                             解説を読み込めませんでした
@@ -76,9 +54,8 @@ export function QuizExplainSheet({ isOpen, onClose, wordSetId, wordId, onEdit }:
                             </div>
                         </>
                     )}
-                </div>
             </div>
-        </div>
+        </BottomSheet>
     )
 }
 

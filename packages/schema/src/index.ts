@@ -202,8 +202,9 @@ export const QuizAnswerResponseSchema = z.object({
 });
 export type QuizAnswerResponse = z.infer<typeof QuizAnswerResponseSchema>;
 
-// GET /quiz/:setId/:wordId/explain のレスポンス（結果一覧からの解説表示用）。
-export const QuizExplainMeaningSchema = z.object({
+// 表示用の意味1件（word_meaning の全項目 + 習得状態）。
+// クイズの解説シートとフラッシュカードの裏面が同じ形を共有する。
+export const WordMeaningDetailSchema = z.object({
 	id: z.string(),
 	slot: z.number().int(),
 	meaning: z.string(),
@@ -216,6 +217,10 @@ export const QuizExplainMeaningSchema = z.object({
 	source: z.string().nullable(),
 	isRemembered: z.boolean(),
 });
+export type WordMeaningDetail = z.infer<typeof WordMeaningDetailSchema>;
+
+// GET /quiz/:setId/:wordId/explain のレスポンス（結果一覧からの解説表示用）。
+export const QuizExplainMeaningSchema = WordMeaningDetailSchema;
 export type QuizExplainMeaning = z.infer<typeof QuizExplainMeaningSchema>;
 
 export const QuizExplainResponseSchema = z.object({
@@ -275,3 +280,54 @@ export const QuizSessionDetailSchema = QuizSessionSummarySchema.extend({
 	items: z.array(QuizSessionItemSchema),
 });
 export type QuizSessionDetail = z.infer<typeof QuizSessionDetailSchema>;
+
+// ---------------------------------------------------------------------------
+// フラッシュカード(P3)の共有スキーマ
+// カードは「単語1枚」。表=単語（＋発音記号・品詞）、裏=その単語の全ての意味を並べる。
+// 評価は単語単位で、known/unknown を配下の全 meaning に一括適用する
+// （review_log は meaning 単位で残すため、サーバー側で展開する）。
+// 出題範囲は P0 の StudyScopeSchema(all|unmastered) をそのまま使う。
+// ---------------------------------------------------------------------------
+
+// GET /cards/:setId のクエリ
+export const CardsQuerySchema = z.object({
+	scope: StudyScopeSchema.default("all"),
+	// 1デッキの最大枚数。1セッションで捌ける現実的な上限として既定30枚。
+	limit: z.coerce.number().int().min(1).max(100).default(30),
+});
+export type CardsQuery = z.infer<typeof CardsQuerySchema>;
+
+// カード1枚（＝単語1件）。表・裏の表示に必要な情報を1往復で全て含める
+// （裏返した瞬間に追加フェッチが走らないようにするため）。
+export const CardSchema = z.object({
+	wordId: z.string(),
+	text: z.string().min(1),
+	locationLabel: z.string().nullable(),
+	imageKey: z.string().nullable(),
+	isMastered: z.boolean(),
+	meanings: z.array(WordMeaningDetailSchema).min(1),
+});
+export type Card = z.infer<typeof CardSchema>;
+
+// GET /cards/:setId のレスポンス
+export const CardsResponseSchema = z.object({
+	scope: StudyScopeSchema,
+	cards: z.array(CardSchema),
+});
+export type CardsResponse = z.infer<typeof CardsResponseSchema>;
+
+// POST /cards/:setId/swipe のリクエスト。
+// remembered=true(右スワイプ:知っている) / false(左スワイプ:まだ知らない)。
+export const CardSwipeRequestSchema = z.object({
+	wordId: z.string().min(1),
+	remembered: z.boolean(),
+});
+export type CardSwipeRequest = z.infer<typeof CardSwipeRequestSchema>;
+
+// レスポンス: 更新後の isRemembered（全 meaning 共通）と isMastered を返す（Web の表示更新用）。
+export const CardSwipeResponseSchema = z.object({
+	success: z.boolean(),
+	isRemembered: z.boolean(),
+	isMastered: z.boolean(),
+});
+export type CardSwipeResponse = z.infer<typeof CardSwipeResponseSchema>;

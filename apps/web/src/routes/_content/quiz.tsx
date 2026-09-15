@@ -13,6 +13,7 @@ import {
 } from '~/hooks/use-quiz'
 import { useContentContext } from '~/lib/content-context'
 import { haptic } from '~/lib/haptic'
+import { primeQuizSound } from '~/lib/quiz-sound'
 import type { QuizDirection, QuizQuestion, QuizScope, QuizSessionItem, QuizTimeLimit } from '~/types'
 
 export const Route = createFileRoute('/_content/quiz')({
@@ -67,6 +68,10 @@ function QuizPage() {
     const startQuiz = (targetScope: QuizScope) => {
         if (!selectedWordSetId) return
         haptic('medium')
+        // iOS Safari は AudioContext の resume がユーザー操作中でないと効かないため、
+        // クイズ生成(非同期)より先にこのタップの中で起こしておく。
+        // これが無いと、タップの発生しない1問目の時間切れで効果音が鳴らない。
+        primeQuizSound()
         setScope(targetScope)
         setEmptyState(null)
         setHasGenerateError(false)
@@ -97,6 +102,7 @@ function QuizPage() {
     // 結果画面の「同じ問題をやり直す」。APIは呼ばず、同じ questions のまま index/answers だけリセットする。
     const retrySameQuiz = () => {
         haptic('medium')
+        primeQuizSound()
         setCurrentIndex(0)
         setAnswers([])
         setPhase('playing')

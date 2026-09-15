@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import { BsVolumeMute, BsVolumeUp, BsX } from 'react-icons/bs'
 import { ttsLangForDirection, useTtsPlayer, useVoiceEnabled, type TtsLang } from '~/hooks/use-tts'
 import { haptic } from '~/lib/haptic'
-import { playQuizAnswerSound, primeQuizSound } from '~/lib/quiz-sound'
+import { playQuizAnswerSound } from '~/lib/quiz-sound'
 import type { QuizDirection, QuizQuestion, QuizSessionItem, QuizTimeLimit } from '~/types'
 
 interface QuizPlayingScreenProps {
@@ -34,12 +34,6 @@ export function QuizPlayingScreen({
     // (playingフェーズ)を通して1つ持ち、Blob URLキャッシュをまたいで使い回す。
     const { enabled: voiceEnabled, toggle: toggleVoice } = useVoiceEnabled()
     const { play, stop } = useTtsPlayer()
-
-    // 「はじめる」のタップ直後にAudioContextを起こしておく。iOS/Safariは操作起点でしか
-    // resumeできないため、これが無いと時間切れ（タップ無し）の不正解音が鳴らない。
-    useEffect(() => {
-        primeQuizSound()
-    }, [])
 
     return (
         // 没入モード（Header/Footerを隠す）で消えた縦幅を、このコンテナ自体の高さで埋める。

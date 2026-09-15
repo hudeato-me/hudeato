@@ -119,6 +119,9 @@ function QuizQuestionCard({
     onAnswer: (item: QuizSessionItem) => void
 }) {
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+    // 「わからない」で回答した場合。不正解として記録するが、選択肢のハイライト
+    // (正解=緑/誤答=赤)は出さない（自分で選んでいないため、答え合わせの演出をしない）。
+    const [skipped, setSkipped] = useState(false)
     const [locked, setLocked] = useState(false)
     const [scope, animate] = useAnimate<HTMLDivElement>()
     const ttsLang = ttsLangForDirection(direction)
@@ -152,7 +155,11 @@ function QuizQuestionCard({
     // タイマーは ref に保持し、フィードバック中に「やめる」等でアンマウントされた場合は
     // クリーンアップで破棄する（config に戻った後に回答記録が誤発火するのを防ぐ）
     const FEEDBACK_DELAY_MS = 600
-    const submitAfterDelay = (selectedText: string | null, correct: boolean) => {
+    const submitAfterDelay = (
+        selectedText: string | null,
+        correct: boolean,
+        isSkipped = false,
+    ) => {
         feedbackTimeoutRef.current = setTimeout(() => {
             onAnswer({
                 wordId: question.wordId,
@@ -161,6 +168,7 @@ function QuizQuestionCard({
                 selectedText,
                 correctText: question.choices[question.correctIndex],
                 correct,
+                skipped: isSkipped,
             })
         }, FEEDBACK_DELAY_MS)
     }
@@ -173,6 +181,20 @@ function QuizQuestionCard({
         haptic('error')
         if (voiceEnabledRef.current) playQuizAnswerSound(false)
         submitAfterDelay(null, false)
+    }
+
+    // 「わからない」: 不正解として記録し、音も不正解と同じにする。
+    // ただし答え合わせ（選択肢の色分け・シェイク）はせず、静かに次の問題へ進む。
+    const handleSkip = () => {
+        if (answeredRef.current) return
+        answeredRef.current = true
+        if (deadlineTimeoutRef.current) clearTimeout(deadlineTimeoutRef.current)
+        barControlsRef.current?.stop()
+        setLocked(true)
+        setSkipped(true)
+        haptic('error')
+        if (voiceEnabledRef.current) playQuizAnswerSound(false)
+        submitAfterDelay(null, false, true)
     }
 
     const handleSelect = (idx: number) => {
@@ -256,7 +278,8 @@ function QuizQuestionCard({
                     const isCorrectChoice = idx === question.correctIndex
 
                     let stateClass = 'bg-white border-black/5 text-black/80'
-                    if (locked) {
+                    // 「わからない」のときは答え合わせをしないので、通常表示のまま据え置く
+                    if (locked && !skipped) {
                         if (isCorrectChoice) {
                             stateClass = 'bg-green-500/10 border-green-500/40 text-green-700'
                         } else if (isSelected) {
@@ -266,7 +289,7 @@ function QuizQuestionCard({
                         }
                     }
 
-                    const shouldShake = locked && isSelected && !isCorrectChoice
+                    const shouldShake = locked && !skipped && isSelected && !isCorrectChoice
 
                     return (
                         <motion.button
@@ -284,6 +307,27 @@ function QuizQuestionCard({
                         </motion.button>
                     )
                 })}
+            </div>
+
+            {/* 「わからない」: 4択と同じ見た目にすると5つ目の選択肢に見えてしまうため、
+                枠線のないテキストボタンにする。選択肢群との距離は -mt-3 で詰めて
+                (親の gap-6 を相殺)、同じグループに属することを示す。
+                回答後も高さを保ったまま残すことで、レイアウトが跳ねないようにする。 */}
+            <div className="-mt-3 flex justify-center">
+                <button
+                    type="button"
+                    disabled={locked}
+                    onClick={handleSkip}
+                    className={`px-5 py-2.5 rounded-full text-[14px] transition-all ${
+                        locked
+                            ? skipped
+                                ? 'bg-black/[0.04] text-black/40'
+                                : 'text-black/15'
+                            : 'text-black/40 active:scale-95 active:bg-black/[0.04]'
+                    }`}
+                >
+                    わからない
+                </button>
             </div>
 
             {/* 各問の制限時間シークバー。祖先(PhaseTransition/AnimatedOutlet)がtransformを持つため

@@ -97,12 +97,15 @@ export function QuizResultScreen({ wordSetId, items, footer }: QuizResultScreenP
                         </div>
                         <div className="min-w-0 flex-1">
                             <p className="text-[14px] text-black/80 leading-snug">{item.prompt}</p>
+                            {/* 未回答(selectedText=null)は「わからない」と時間切れの2種類。
+                                skipped で区別する（既存セッションには skipped が無いため時間切れ扱い） */}
                             <p
                                 className={`text-[13px] mt-1 ${
                                     item.selectedText === null ? 'italic text-black/35' : 'text-black/40'
                                 }`}
                             >
-                                あなたの回答: {item.selectedText ?? '時間切れ'}
+                                あなたの回答:{' '}
+                                {item.selectedText ?? (item.skipped ? 'わからない' : '時間切れ')}
                             </p>
                             {!item.correct && (
                                 <p className="text-[13px] text-green-600 mt-0.5">正解: {item.correctText}</p>

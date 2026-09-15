@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { BsVolumeMute, BsVolumeUp, BsX } from 'react-icons/bs'
 import { ttsLangForDirection, useTtsPlayer, useVoiceEnabled, type TtsLang } from '~/hooks/use-tts'
 import { haptic } from '~/lib/haptic'
+import { playQuizAnswerSound, primeQuizSound } from '~/lib/quiz-sound'
 import type { QuizDirection, QuizQuestion, QuizSessionItem, QuizTimeLimit } from '~/types'
 
 interface QuizPlayingScreenProps {
@@ -33,6 +34,12 @@ export function QuizPlayingScreen({
     // (playingフェーズ)を通して1つ持ち、Blob URLキャッシュをまたいで使い回す。
     const { enabled: voiceEnabled, toggle: toggleVoice } = useVoiceEnabled()
     const { play, stop } = useTtsPlayer()
+
+    // 「はじめる」のタップ直後にAudioContextを起こしておく。iOS/Safariは操作起点でしか
+    // resumeできないため、これが無いと時間切れ（タップ無し）の不正解音が鳴らない。
+    useEffect(() => {
+        primeQuizSound()
+    }, [])
 
     return (
         // 没入モード（Header/Footerを隠す）で消えた縦幅を、このコンテナ自体の高さで埋める。
@@ -128,6 +135,11 @@ function QuizQuestionCard({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [voiceEnabled])
 
+    // 時間切れのコールバックはマウント時に一度だけ張る（=そのときの props を閉じ込める）ため、
+    // 出題中にトグルが切り替わっても最新値を読めるよう ref に持つ。
+    const voiceEnabledRef = useRef(voiceEnabled)
+    voiceEnabledRef.current = voiceEnabled
+
     // タイムアウト判定はアニメーション(表示)に依存させず、マウント時に一度だけ張る
     // setTimeout（deadline方式）で行う。二重発火防止は ref で行い、state の再レンダリングを待たない。
     const answeredRef = useRef(false)
@@ -159,6 +171,7 @@ function QuizQuestionCard({
         barControlsRef.current?.stop()
         setLocked(true)
         haptic('error')
+        if (voiceEnabledRef.current) playQuizAnswerSound(false)
         submitAfterDelay(null, false)
     }
 
@@ -172,6 +185,7 @@ function QuizQuestionCard({
         setSelectedIndex(idx)
         const correct = idx === question.correctIndex
         haptic(correct ? 'success' : 'error')
+        if (voiceEnabledRef.current) playQuizAnswerSound(correct)
         submitAfterDelay(question.choices[idx], correct)
     }
 

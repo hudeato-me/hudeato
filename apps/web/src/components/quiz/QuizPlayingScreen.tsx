@@ -309,21 +309,22 @@ function QuizQuestionCard({
                 })}
             </div>
 
-            {/* 「わからない」: 4択と同じ見た目にすると5つ目の選択肢に見えてしまうため、
-                枠線のないテキストボタンにする。選択肢群との距離は -mt-3 で詰めて
+            {/* 「わからない」: 押下・選択時に色が付く範囲を選択肢と揃えるため、
+                幅・角丸・余白は選択肢と同じにする（枠線を持たず文字も中央・グレーなので
+                5つ目の選択肢には見えない）。選択肢群との距離も -mt-3 で 12px に詰めて
                 (親の gap-6 を相殺)、同じグループに属することを示す。
                 回答後も高さを保ったまま残すことで、レイアウトが跳ねないようにする。 */}
-            <div className="-mt-3 flex justify-center">
+            <div className="-mt-3">
                 <button
                     type="button"
                     disabled={locked}
                     onClick={handleSkip}
-                    className={`px-5 py-2.5 rounded-full text-[14px] transition-all ${
+                    className={`w-full rounded-[14px] border border-transparent px-5 py-4 text-center text-[14px] leading-snug transition-colors ${
                         locked
                             ? skipped
                                 ? 'bg-black/[0.04] text-black/40'
                                 : 'text-black/15'
-                            : 'text-black/40 active:scale-95 active:bg-black/[0.04]'
+                            : 'text-black/40 active:bg-black/[0.04]'
                     }`}
                 >
                     わからない

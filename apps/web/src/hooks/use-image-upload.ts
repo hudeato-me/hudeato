@@ -1,7 +1,7 @@
 const apiBase =
 	typeof window !== "undefined"
-		? `http://${window.location.hostname}:8787`
-		: "http://localhost:8787";
+		? `http://${window.location.hostname}:21391`
+		: "http://localhost:21391";
 
 // 画像アップロード: FileをR2へPOST → objectKeyを返す
 export async function uploadImage(file: File): Promise<string> {

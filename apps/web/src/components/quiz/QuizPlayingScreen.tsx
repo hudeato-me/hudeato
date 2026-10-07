@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { BsVolumeMute, BsVolumeUp, BsX } from 'react-icons/bs'
 import { ttsLangForDirection, useTtsPlayer, useVoiceEnabled, type TtsLang } from '~/hooks/use-tts'
 import { haptic } from '~/lib/haptic'
+import { playQuizAnswerSound } from '~/lib/quiz-sound'
 import type { QuizDirection, QuizQuestion, QuizSessionItem, QuizTimeLimit } from '~/types'
 
 interface QuizPlayingScreenProps {
@@ -112,6 +113,9 @@ function QuizQuestionCard({
     onAnswer: (item: QuizSessionItem) => void
 }) {
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+    // 「わからない」で回答した場合。不正解として記録するが、選択肢のハイライト
+    // (正解=緑/誤答=赤)は出さない（自分で選んでいないため、答え合わせの演出をしない）。
+    const [skipped, setSkipped] = useState(false)
     const [locked, setLocked] = useState(false)
     const [scope, animate] = useAnimate<HTMLDivElement>()
     const ttsLang = ttsLangForDirection(direction)
@@ -128,6 +132,11 @@ function QuizQuestionCard({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [voiceEnabled])
 
+    // 時間切れのコールバックはマウント時に一度だけ張る（=そのときの props を閉じ込める）ため、
+    // 出題中にトグルが切り替わっても最新値を読めるよう ref に持つ。
+    const voiceEnabledRef = useRef(voiceEnabled)
+    voiceEnabledRef.current = voiceEnabled
+
     // タイムアウト判定はアニメーション(表示)に依存させず、マウント時に一度だけ張る
     // setTimeout（deadline方式）で行う。二重発火防止は ref で行い、state の再レンダリングを待たない。
     const answeredRef = useRef(false)
@@ -140,7 +149,11 @@ function QuizQuestionCard({
     // タイマーは ref に保持し、フィードバック中に「やめる」等でアンマウントされた場合は
     // クリーンアップで破棄する（config に戻った後に回答記録が誤発火するのを防ぐ）
     const FEEDBACK_DELAY_MS = 600
-    const submitAfterDelay = (selectedText: string | null, correct: boolean) => {
+    const submitAfterDelay = (
+        selectedText: string | null,
+        correct: boolean,
+        isSkipped = false,
+    ) => {
         feedbackTimeoutRef.current = setTimeout(() => {
             onAnswer({
                 wordId: question.wordId,
@@ -149,6 +162,7 @@ function QuizQuestionCard({
                 selectedText,
                 correctText: question.choices[question.correctIndex],
                 correct,
+                skipped: isSkipped,
             })
         }, FEEDBACK_DELAY_MS)
     }
@@ -159,7 +173,22 @@ function QuizQuestionCard({
         barControlsRef.current?.stop()
         setLocked(true)
         haptic('error')
+        if (voiceEnabledRef.current) playQuizAnswerSound(false)
         submitAfterDelay(null, false)
+    }
+
+    // 「わからない」: 不正解として記録し、音も不正解と同じにする。
+    // ただし答え合わせ（選択肢の色分け・シェイク）はせず、静かに次の問題へ進む。
+    const handleSkip = () => {
+        if (answeredRef.current) return
+        answeredRef.current = true
+        if (deadlineTimeoutRef.current) clearTimeout(deadlineTimeoutRef.current)
+        barControlsRef.current?.stop()
+        setLocked(true)
+        setSkipped(true)
+        haptic('error')
+        if (voiceEnabledRef.current) playQuizAnswerSound(false)
+        submitAfterDelay(null, false, true)
     }
 
     const handleSelect = (idx: number) => {
@@ -172,6 +201,7 @@ function QuizQuestionCard({
         setSelectedIndex(idx)
         const correct = idx === question.correctIndex
         haptic(correct ? 'success' : 'error')
+        if (voiceEnabledRef.current) playQuizAnswerSound(correct)
         submitAfterDelay(question.choices[idx], correct)
     }
 
@@ -242,7 +272,8 @@ function QuizQuestionCard({
                     const isCorrectChoice = idx === question.correctIndex
 
                     let stateClass = 'bg-white border-black/5 text-black/80'
-                    if (locked) {
+                    // 「わからない」のときは答え合わせをしないので、通常表示のまま据え置く
+                    if (locked && !skipped) {
                         if (isCorrectChoice) {
                             stateClass = 'bg-green-500/10 border-green-500/40 text-green-700'
                         } else if (isSelected) {
@@ -252,7 +283,7 @@ function QuizQuestionCard({
                         }
                     }
 
-                    const shouldShake = locked && isSelected && !isCorrectChoice
+                    const shouldShake = locked && !skipped && isSelected && !isCorrectChoice
 
                     return (
                         <motion.button
@@ -270,6 +301,28 @@ function QuizQuestionCard({
                         </motion.button>
                     )
                 })}
+            </div>
+
+            {/* 「わからない」: 押下・選択時に色が付く範囲を選択肢と揃えるため、
+                幅・角丸・余白は選択肢と同じにする（枠線を持たず文字も中央・グレーなので
+                5つ目の選択肢には見えない）。選択肢群との距離も -mt-3 で 12px に詰めて
+                (親の gap-6 を相殺)、同じグループに属することを示す。
+                回答後も高さを保ったまま残すことで、レイアウトが跳ねないようにする。 */}
+            <div className="-mt-3">
+                <button
+                    type="button"
+                    disabled={locked}
+                    onClick={handleSkip}
+                    className={`w-full rounded-[14px] border border-transparent px-5 py-4 text-center text-[14px] leading-snug transition-colors ${
+                        locked
+                            ? skipped
+                                ? 'bg-black/[0.04] text-black/40'
+                                : 'text-black/15'
+                            : 'text-black/40 active:bg-black/[0.04]'
+                    }`}
+                >
+                    わからない
+                </button>
             </div>
 
             {/* 各問の制限時間シークバー。祖先(PhaseTransition/AnimatedOutlet)がtransformを持つため

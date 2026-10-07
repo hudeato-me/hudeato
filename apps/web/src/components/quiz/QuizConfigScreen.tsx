@@ -103,12 +103,14 @@ export function QuizConfigScreen({
             <section className="space-y-3">
                 <div className="text-sm text-black/50 px-1">音声</div>
                 <div className="w-full rounded-[14px] border border-black/5 bg-white px-4 py-3.5 flex items-center justify-between">
-                    <span className="text-[15px] text-black/80">発音を自動再生</span>
+                    {/* 発音の自動再生と正誤の効果音は1つのトグルでまとめて切り替える
+                        （静かな場所では両方切りたい、が現実的な使われ方のため） */}
+                    <span className="text-[15px] text-black/80">発音と効果音</span>
                     <button
                         type="button"
                         role="switch"
                         aria-checked={voiceEnabled}
-                        aria-label="発音を自動再生"
+                        aria-label="発音と効果音"
                         onClick={() => {
                             haptic('light')
                             toggleVoice()

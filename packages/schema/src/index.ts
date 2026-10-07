@@ -243,7 +243,11 @@ export type QuizExplainResponse = z.infer<typeof QuizExplainResponseSchema>;
 export const QuizTimeLimitSchema = z.union([z.literal(10), z.literal(20), z.literal(30)]);
 export type QuizTimeLimit = z.infer<typeof QuizTimeLimitSchema>;
 
-// セッション内の1問分の表示用スナップショット。selectedText が null は時間切れ(未回答)。
+// セッション内の1問分の表示用スナップショット。
+// selectedText が null は未回答(時間切れ、または「わからない」)を表し、
+// そのどちらかは skipped で区別する(skipped=true なら「わからない」)。
+// skipped は後から追加したフィールドのため optional。
+// 既存セッションの itemsJson(未設定)も読み込めるようにしている。
 export const QuizSessionItemSchema = z.object({
 	wordId: z.string(),
 	meaningId: z.string(),
@@ -251,6 +255,7 @@ export const QuizSessionItemSchema = z.object({
 	selectedText: z.string().nullable(),
 	correctText: z.string(),
 	correct: z.boolean(),
+	skipped: z.boolean().optional(),
 });
 export type QuizSessionItem = z.infer<typeof QuizSessionItemSchema>;
 
